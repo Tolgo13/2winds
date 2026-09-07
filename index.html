@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>温湿度グラフ作成ツール</title>
+<style>
+  :root{
+    --temp-color:#d93a34;      /* 温度の線の色 */
+    --hum-color:#2d6cdf;       /* 湿度の線の色 */
+    --line:#d7d7d7;
+    --text:#222;
+    --muted:#666;
+    --bg:#f4f5f7;
+    --panel:#fff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Yu Gothic","Hiragino Kaku Gothic ProN","Meiryo",sans-serif;
+    font-size:14px; line-height:1.6;
+  }
+  header{
+    background:#37474f; color:#fff; padding:14px 20px;
+  }
+  header h1{margin:0; font-size:18px; font-weight:600; letter-spacing:.04em;}
+  header p{margin:2px 0 0; font-size:12px; opacity:.85;}
+  main{max-width:1280px; margin:0 auto; padding:20px;}
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    padding:16px; margin-bottom:16px;
+  }
+  .panel h2{
+    margin:0 0 12px; font-size:14px; font-weight:700; color:#37474f;
+    border-left:4px solid #37474f; padding-left:8px;
+  }
+  /* ---- ファイル読み込み欄 ---- */
+  #dropZone{
+    border:2px dashed #b0bec5; border-radius:6px; padding:26px; text-align:center;
+    background:#fafbfc; cursor:pointer; transition:.15s;
+  }
+  #dropZone.hover{border-color:#37474f; background:#eceff1;}
+  #dropZone strong{display:block; font-size:15px; margin-bottom:4px;}
+  #dropZone span{color:var(--muted); font-size:12px;}
+  input[type=file]{display:none;}
+  /* ---- 各種入力 ---- */
+  .row{display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end;}
+  .field{display:flex; flex-direction:column; gap:4px;}
+  .field label{font-size:12px; color:var(--muted);}
+  select,input[type=date],input[type=number],input[type=text]{
+    padding:5px 8px; border:1px solid #b0bec5; border-radius:4px;
+    font-family:inherit; font-size:13px; background:#fff;
+  }
+  button{
+    padding:6px 14px; border:1px solid #37474f; background:#37474f; color:#fff;
+    border-radius:4px; font-family:inherit; font-size:13px; cursor:pointer;
+  }
+  button:hover{background:#455a64;}
+  button.sub{background:#fff; color:#37474f;}
+  button.sub:hover{background:#eceff1;}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;}
+  .chips button{padding:4px 10px; font-size:12px;}
+  .checks{display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin-top:12px;}
+  .checks label{font-size:13px; display:flex; align-items:center; gap:5px;}
+  /* ---- グラフ ---- */
+  #chartWrap{position:relative; background:#fff;}
+  canvas{width:100%; height:520px; display:block;}
+  #tooltip{
+    position:absolute; pointer-events:none; display:none;
+    background:rgba(38,50,56,.94); color:#fff; padding:6px 9px; border-radius:4px;
+    font-size:12px; white-space:nowrap; transform:translate(-50%,-115%); z-index:5;
+  }
+  /* ---- 統計表 ---- */
+  table{border-collapse:collapse; width:100%; font-size:13px;}
+  th,td{border:1px solid var(--line); padding:6px 10px; text-align:center;}
+  th{background:#eceff1; font-weight:600;}
+  td.name{background:#f7f8f9; font-weight:600;}
+  .hidden{display:none;}
+  #message{font-size:13px; color:#b71c1c; margin-top:8px; white-space:pre-wrap;}
+  .note{font-size:12px; color:var(--muted); margin-top:8px;}
+  code{background:#eceff1; padding:1px 4px; border-radius:3px;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>温湿度グラフ作成ツール</h1>
+  <p>CSVファイルを読み込み、期間を選んで温湿度グラフを表示・保存します（インターネット接続不要／データは端末外に送信されません）</p>
+</header>
+
+<main>
+
+  <!-- ============ 1. CSV読み込み ============ -->
+  <section class="panel">
+    <h2>1. CSVファイルの読み込み</h2>
+    <div id="dropZone">
+      <strong>ここにCSVファイルをドラッグ＆ドロップ</strong>
+      <span>または クリックしてファイルを選択（文字コードは UTF-8 / Shift_JIS 自動判定）</span>
+    </div>
+    <input type="file" id="fileInput" accept=".csv,.txt">
+    <div id="fileInfo" class="note"></div>
+    <div id="message"></div>
+    <div class="note">
+      対応形式の例：<code>日時,温度,湿度</code> / <code>日付,時刻,温度(℃),湿度(%)</code>
+      （データロガー出力のように上部に説明行があっても、自動で読み飛ばします）
+    </div>
+  </section>
+
+  <!-- ============ 2. 列の指定 ============ -->
+  <section class="panel hidden" id="columnPanel">
+    <h2>2. 列の指定（自動判定されます。違う場合は変更してください）</h2>
+    <div class="row">
+      <div class="field">
+        <label for="colDate">日時の列</label>
+        <select id="colDate"></select>
+      </div>
+      <div class="field">
+        <label for="colTime">時刻の列（日付と時刻が別列のとき）</label>
+        <select id="colTime"></select>
+      </div>
+      <div class="field">
+        <label for="colTemp">温度の列</label>
+        <select id="colTemp"></select>
+      </div>
+      <div class="field">
+        <label for="colHum">湿度の列</label>
+        <select id="colHum"></select>
+      </div>
+      <button id="applyColumns">この設定で読み込む</button>
+    </div>
+  </section>
+
+  <!-- ============ 3. 期間とデザイン ============ -->
+  <section class="panel hidden" id="controlPanel">
+    <h2>3. 表示期間・デザイン</h2>
+    <div class="row">
+      <div class="field">
+        <label for="fromDate">開始日</label>
+        <input type="date" id="fromDate">
+      </div>
+      <div class="field">
+        <label for="toDate">終了日</label>
+        <input type="date" id="toDate">
+      </div>
+      <div class="field">
+        <label for="titleInput">グラフタイトル</label>
+        <input type="text" id="titleInput" size="28" placeholder="例：収蔵庫 温湿度記録">
+      </div>
+      <button id="drawBtn">グラフを表示</button>
+      <button id="pngBtn" class="sub">PNG画像で保存</button>
+      <button id="printBtn" class="sub">印刷 / PDF</button>
+    </div>
+
+    <div class="chips">
+      <span style="font-size:12px;color:var(--muted);align-self:center;">期間の簡易選択：</span>
+      <button class="sub" data-preset="all">全期間</button>
+      <button class="sub" data-preset="year">直近1年</button>
+      <button class="sub" data-preset="3month">直近3か月</button>
+      <button class="sub" data-preset="month">直近1か月</button>
+      <button class="sub" data-preset="week">直近1週間</button>
+      <span style="font-size:12px;color:var(--muted);align-self:center;margin-left:10px;">月単位：</span>
+      <select id="monthSelect" style="font-size:12px;"></select>
+    </div>
+
+    <div class="checks">
+      <label><input type="checkbox" id="showTemp" checked> 温度を表示</label>
+      <label><input type="checkbox" id="showHum" checked> 湿度を表示</label>
+      <label><input type="checkbox" id="showBand" checked> 目標湿度帯を表示</label>
+      <div class="field">
+        <label for="bandLow">目標湿度 下限(%)</label>
+        <input type="number" id="bandLow" value="55" min="0" max="100" step="1" style="width:80px">
+      </div>
+      <div class="field">
+        <label for="bandHigh">目標湿度 上限(%)</label>
+        <input type="number" id="bandHigh" value="65" min="0" max="100" step="1" style="width:80px">
+      </div>
+      <div class="field">
+        <label for="smooth">データの表示方法</label>
+        <select id="smooth">
+          <option value="raw">生データ（記録どおり）</option>
+          <option value="daily">日平均</option>
+          <option value="dailyminmax">日平均＋日較差（帯）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="tempMin">温度軸 最小/最大(℃)</label>
+        <span>
+          <input type="number" id="tempMin" value="0" step="5" style="width:70px">
+          <input type="number" id="tempMax" value="40" step="5" style="width:70px">
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 4. グラフ ============ -->
+  <section class="panel hidden" id="chartPanel">
+    <div id="chartWrap">
+      <canvas id="chart"></canvas>
+      <div id="tooltip"></div>
+    </div>
+  </section>
+
+  <!-- ============ 5. 統計 ============ -->
+  <section class="panel hidden" id="statsPanel">
+    <h2>4. 期間内の集計</h2>
+    <table id="statsTable"></table>
+  </section>
+
+</main>
+
+<script>
+/* =========================================================================
+   温湿度グラフ作成ツール
+   -------------------------------------------------------------------------
+   全体の流れ：
+     CSVファイル → 文字コード判定 → 表(2次元配列)に変換 → 列を特定
+       → レコード配列 records[{t:日時, temp:温度, hum:湿度}] を作る
+       → 期間で絞り込み → キャンバスに描画 → 統計表を作る
+   ========================================================================= */
+
+/* ---- アプリ全体で使うデータの置き場所（グローバル変数） ---- */
+let rawTable   = [];   // CSVを2次元配列にしたもの（1行目=見出しの想定）
+let headerRow  = [];   // 見出し（列名）の配列
+let records    = [];   // 解析後のデータ [{t:Date, temp:Number|null, hum:Number|null}, ...]
+let viewPoints = [];   // 現在グラフに描いている点（ツールチップ用）
+let plotArea   = null; // グラフの描画領域の座標（ツールチップ用）
+
+/* =========================================================================
+   1. ファイル読み込み関係
+   ========================================================================= */
+
+/**
+ * readFileAsText(file)
+ *   役割：選ばれたファイルを読み込み、文字化けしない文字列にして返す。
+ *   ポイント：日本語CSVは Shift_JIS のことが多いので、
+ *            まず UTF-8 で厳密に読んでみて、失敗したら Shift_JIS で読み直す。
+ *   戻り値：Promise（await で文字列が受け取れる）
+ */
+function readFileAsText(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("ファイルを読み込めませんでした。"));
+    reader.onload = () => {
+      const buffer = reader.result;
+      let text;
+      try{
+        // fatal:true = 不正なバイトがあればエラーにする（＝UTF-8ではないと判断できる）
+        text = new TextDecoder("utf-8", {fatal:true}).decode(buffer);
+      }catch(e){
+        try{
+          text = new TextDecoder("shift_jis").decode(buffer);
+        }catch(e2){
+          text = new TextDecoder("utf-8").decode(buffer); // 最後の手段
+        }
+      }
+      // 先頭のBOM（見えない印）を取り除く
+      resolve(text.replace(/^﻿/, ""));
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/**
+ * splitCsvLine(line)
+ *   役割：CSVの1行を「,」で分割して配列にする。
+ *   ポイント：" " で囲まれた中のカンマは区切りとして扱わない。
+ *            タブ区切りファイルにも対応（タブが含まれる行はタブで分割）。
+ */
+function splitCsvLine(line){
+  if(line.indexOf("\t") >= 0 && line.indexOf(",") < 0){
+    return line.split("\t").map(s => s.trim());
+  }
+  const result = [];
+  let current = "";
+  let inQuote = false;
+  for(let i = 0; i < line.length; i++){
+    const c = line[i];
+    if(inQuote){
+      if(c === '"'){
+        if(line[i+1] === '"'){ current += '"'; i++; }  // "" は " 一文字
+        else inQuote = false;
+      }else current += c;
+    }else{
+      if(c === '"') inQuote = true;
+      else if(c === ',') { result.push(current.trim()); current = ""; }
+      else current += c;
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+/**
+ * parseCSV(text)
+ *   役割：CSV全体の文字列を 2次元配列（行×列）に変換する。
+ *   ポイント：空行は捨てる。ロガー出力にありがちな
+ *            「先頭の説明行（列数が少ない行）」は自動で読み飛ばす。
+ */
+function parseCSV(text){
+  const lines = text.split(/\r\n|\r|\n/).filter(l => l.trim() !== "");
+  const rows  = lines.map(splitCsvLine);
+  if(rows.length === 0) return [];
+
+  // 最も多く出現する列数を「本来の列数」とみなす
+  const countMap = {};
+  rows.forEach(r => { countMap[r.length] = (countMap[r.length] || 0) + 1; });
+  let mainLen = 0, best = -1;
+  for(const len in countMap){
+    if(countMap[len] > best){ best = countMap[len]; mainLen = Number(len); }
+  }
+  // 先頭の、列数が合わない説明行を取り除く
+  let start = 0;
+  while(start < rows.length && rows[start].length !== mainLen) start++;
+  return rows.slice(start).filter(r => r.length === mainLen);
+}
+
+/* =========================================================================
+   2. 日時・数値の解析
+   ========================================================================= */
+
+/**
+ * toHalfWidth(s)
+ *   役割：全角数字や全角記号を半角に直す（「２０２４／１／１」対策）。
+ */
+function toHalfWidth(s){
+  return s.replace(/[！-～]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+          .replace(/　/g, " ");
+}
+
+/**
+ * parseDateTime(dateStr, timeStr)
+ *   役割：文字列から日時（Dateオブジェクト）を作る。
+ *   対応：2024/1/1 9:30 ／ 2024-01-01T09:30 ／ 2024年1月1日 9時30分 ／
+ *        日付列と時刻列が別 ／ Excelのシリアル値（45000など）
+ *   戻り値：Date、解析できなければ null
+ */
+function parseDateTime(dateStr, timeStr){
+  if(dateStr === undefined || dateStr === null) return null;
+  let s = toHalfWidth(String(dateStr)).trim();
+  if(timeStr !== undefined && timeStr !== null && String(timeStr).trim() !== ""){
+    s += " " + toHalfWidth(String(timeStr)).trim();
+  }
+  if(s === "") return null;
+
+  // 「2024年1月1日 9時30分」などを「2024/1/1 9:30」に整形
+  s = s.replace(/年|月/g, "/").replace(/日/g, " ")
+       .replace(/時/g, ":").replace(/分/g, ":").replace(/秒/g, "")
+       .replace(/:$/,"").replace(/\s+/g, " ").trim();
+
+  // 年月日 [時分秒] のパターン
+  let m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})(?:[ T]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if(m){
+    return new Date(+m[1], +m[2]-1, +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+  }
+  // 月/日 のみ（年がない場合は今年として扱う）
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})(?:[ T]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
+  if(m){
+    const y = new Date().getFullYear();
+    return new Date(y, +m[1]-1, +m[2], +(m[3]||0), +(m[4]||0), +(m[5]||0));
+  }
+  // Excelのシリアル値（1900年1月1日からの日数）
+  if(/^\d+(\.\d+)?$/.test(s)){
+    const n = parseFloat(s);
+    if(n > 20000 && n < 80000){
+      return new Date(Math.round((n - 25569) * 86400 * 1000));
+    }
+  }
+  // 最後の手段としてブラウザ標準の解析
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * toNumber(s)
+ *   役割：「23.4」「23.4℃」「 45.0 %」などの文字列から数値だけを取り出す。
+ *   戻り値：数値、取り出せなければ null
+ */
+function toNumber(s){
+  if(s === undefined || s === null) return null;
+  const t = toHalfWidth(String(s)).replace(/[^0-9+\-.eE]/g, "");
+  if(t === "" || t === "-" || t === "+") return null;
+  const n = parseFloat(t);
+  return isNaN(n) ? null : n;
+}
+
+/* =========================================================================
+   3. 列の自動判定
+   ========================================================================= */
+
+/**
+ * guessColumns(header, sampleRow)
+ *   役割：列名（と最初のデータ行）から
+ *        「日時」「時刻」「温度」「湿度」がどの列かを推測する。
+ *   戻り値：{date:番号, time:番号|-1, temp:番号, hum:番号}（-1は該当なし）
+ */
+function guessColumns(header, sampleRow){
+  const idx = {date:-1, time:-1, temp:-1, hum:-1};
+  header.forEach((name, i) => {
+    const h = toHalfWidth(String(name)).toLowerCase();
+    if(idx.hum  < 0 && /湿度|humid|rh|%/.test(h))                    idx.hum  = i;
+    else if(idx.temp < 0 && /温度|気温|temp|℃|°c/.test(h))           idx.temp = i;
+    if(idx.time < 0 && /^(時刻|時間|time)$/.test(h))                 idx.time = i;
+    if(idx.date < 0 && /日時|日付|date|datetime|測定日|年月日/.test(h) && !/時刻/.test(h)) idx.date = i;
+  });
+  // 見出しで分からなければ、実データの中身から推測する
+  if(idx.date < 0 && sampleRow){
+    for(let i = 0; i < sampleRow.length; i++){
+      if(parseDateTime(sampleRow[i])){ idx.date = i; break; }
+    }
+  }
+  if(idx.temp < 0 || idx.hum < 0){
+    const nums = [];
+    if(sampleRow){
+      for(let i = 0; i < sampleRow.length; i++){
+        if(i === idx.date || i === idx.time) continue;
+        const v = toNumber(sampleRow[i]);
+        if(v !== null) nums.push({i, v});
+      }
+    }
+    // 数値列のうち、0〜100で大きい方を湿度、残りを温度とみなす
+    if(idx.temp < 0 && nums.length > 0) idx.temp = nums[0].i;
+    if(idx.hum  < 0 && nums.length > 1) idx.hum  = nums[1].i;
+  }
+  return idx;
+}
+
+/**
+ * buildRecords(rows, idx, hasHeader)
+ *   役割：2次元配列を、グラフで使う records 配列に変換する。
+ *   戻り値：[{t:Date, temp:数値|null, hum:数値|null}, ...]（日時順に並べ替え済み）
+ */
+function buildRecords(rows, idx, hasHeader){
+  const out = [];
+  for(let r = hasHeader ? 1 : 0; r < rows.length; r++){
+    const row = rows[r];
+    const t = parseDateTime(row[idx.date], idx.time >= 0 ? row[idx.time] : null);
+    if(!t) continue;                                  // 日時が読めない行は無視
+    const temp = idx.temp >= 0 ? toNumber(row[idx.temp]) : null;
+    const hum  = idx.hum  >= 0 ? toNumber(row[idx.hum])  : null;
+    if(temp === null && hum === null) continue;       // 値が両方空の行は無視
+    out.push({t, temp, hum});
+  }
+  out.sort((a,b) => a.t - b.t);
+  return out;
+}
+
+/* =========================================================================
+   4. 期間の絞り込み・集計
+   ========================================================================= */
+
+/** ymd(date)：Dateを "2024-01-01" 形式の文字列にする（日付入力欄用） */
+function ymd(d){
+  const p = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth()+1) + "-" + p(d.getDate());
+}
+
+/**
+ * filterByPeriod(list, fromStr, toStr)
+ *   役割：records を「開始日 0:00 〜 終了日 24:00」で絞り込む。
+ */
+function filterByPeriod(list, fromStr, toStr){
+  const from = new Date(fromStr + "T00:00:00");
+  const to   = new Date(toStr   + "T00:00:00");
+  to.setDate(to.getDate() + 1);   // 終了日そのものを含めるため翌日0時まで
+  return list.filter(r => r.t >= from && r.t < to);
+}
+
+/**
+ * aggregateDaily(list)
+ *   役割：1日ごとの平均・最高・最低にまとめる（1年分など長期間の表示用）。
+ *   戻り値：[{t, temp, hum, tempMin, tempMax, humMin, humMax}, ...]
+ */
+function aggregateDaily(list){
+  const map = new Map();
+  list.forEach(r => {
+    const key = ymd(r.t);
+    if(!map.has(key)) map.set(key, {temps:[], hums:[], t:new Date(r.t.getFullYear(), r.t.getMonth(), r.t.getDate(), 12)});
+    const g = map.get(key);
+    if(r.temp !== null) g.temps.push(r.temp);
+    if(r.hum  !== null) g.hums.push(r.hum);
+  });
+  const avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : null;
+  return [...map.values()].map(g => ({
+    t: g.t,
+    temp: avg(g.temps), hum: avg(g.hums),
+    tempMin: g.temps.length ? Math.min(...g.temps) : null,
+    tempMax: g.temps.length ? Math.max(...g.temps) : null,
+    humMin:  g.hums.length  ? Math.min(...g.hums)  : null,
+    humMax:  g.hums.length  ? Math.max(...g.hums)  : null
+  })).sort((a,b) => a.t - b.t);
+}
+
+/**
+ * computeStats(list)
+ *   役割：期間内の最高・最低・平均などを計算して統計表に使う。
+ */
+function computeStats(list){
+  const pick = key => list.map(r => r[key]).filter(v => v !== null && v !== undefined && !isNaN(v));
+  const calc = arr => {
+    if(arr.length === 0) return null;
+    const sum = arr.reduce((a,b) => a+b, 0);
+    return {max: Math.max(...arr), min: Math.min(...arr), avg: sum/arr.length, n: arr.length};
+  };
+  return {temp: calc(pick("temp")), hum: calc(pick("hum")), count: list.length};
+}
+
+/* =========================================================================
+   5. グラフ描画
+   ========================================================================= */
+
+/** niceTicks(min, max, target)：軸の目盛りを切りのよい間隔で作る */
+function niceTicks(min, max, target){
+  const span = (max - min) || 1;
+  const rough = span / target;
+  const pow   = Math.pow(10, Math.floor(Math.log10(rough)));
+  const cand  = [1, 2, 2.5, 5, 10].map(v => v * pow);
+  const step  = cand.find(v => v >= rough) || cand[cand.length-1];
+  const ticks = [];
+  for(let v = Math.ceil(min/step)*step; v <= max + 1e-9; v += step) ticks.push(Math.round(v*1e6)/1e6);
+  return ticks;
+}
+
+/**
+ * makeXTicks(from, to)
+ *   役割：期間の長さに応じて、横軸の目盛り（日付ラベル）を作る。
+ *        1年 → 月初、数か月 → 半月ごと、数週間 → 数日ごと、数日 → 時刻
+ */
+function makeXTicks(from, to){
+  const days = (to - from) / 86400000;
+  const ticks = [];
+  if(days > 300){                       // 1年程度 → 各月1日
+    let d = new Date(from.getFullYear(), from.getMonth(), 1);
+    if(d < from) d.setMonth(d.getMonth()+1);
+    while(d <= to){ ticks.push({t:new Date(d), label:(d.getMonth()+1)+"月"}); d.setMonth(d.getMonth()+1); }
+  }else if(days > 90){                  // 数か月 → 各月1日と15日
+    let d = new Date(from.getFullYear(), from.getMonth(), 1);
+    while(d <= to){
+      if(d >= from) ticks.push({t:new Date(d), label:(d.getMonth()+1)+"/"+d.getDate()});
+      d.setDate(d.getDate() === 1 ? 15 : 1);
+      if(d.getDate() === 1) d.setMonth(d.getMonth()+1);
+    }
+  }else if(days > 2){                   // 数日〜数週間 → 日付
+    const step = Math.max(1, Math.ceil(days/12));
+    let d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    while(d <= to){
+      if(d >= from) ticks.push({t:new Date(d), label:(d.getMonth()+1)+"/"+d.getDate()});
+      d.setDate(d.getDate()+step);
+    }
+  }else{                                // 1〜2日 → 時刻
+    const stepH = days <= 1 ? 3 : 6;
+    let d = new Date(from.getFullYear(), from.getMonth(), from.getDate(), from.getHours());
+    while(d <= to){
+      if(d >= from) ticks.push({t:new Date(d), label:d.getHours()+":00"});
+      d.setHours(d.getHours()+stepH);
+    }
+  }
+  return ticks;
+}
+
+/**
+ * drawSeries(ctx, points, xOf, yOf, color, mode)
+ *   役割：1本の折れ線を描く。
+ *   ポイント：1年分（数万点）だと点が多すぎるので、
+ *            「横1ピクセルあたり最小値〜最大値の縦線」でまとめて描く（帯状の線になる）。
+ */
+function drawSeries(ctx, points, xOf, yOf, color, key, plot){
+  const valid = points.filter(p => p[key] !== null && p[key] !== undefined && !isNaN(p[key]));
+  if(valid.length === 0) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.4;
+  ctx.lineJoin = "round";
+
+  if(valid.length > plot.w * 1.5){
+    // --- データが多い場合：ピクセル列ごとに最小・最大を集めて縦線で描く ---
+    const cols = new Map();
+    valid.forEach(p => {
+      const x = Math.round(xOf(p.t));
+      const v = p[key];
+      if(!cols.has(x)) cols.set(x, {min:v, max:v, first:v, last:v});
+      const c = cols.get(x);
+      if(v < c.min) c.min = v;
+      if(v > c.max) c.max = v;
+      c.last = v;
+    });
+    const xs = [...cols.keys()].sort((a,b) => a-b);
+    ctx.beginPath();
+    let prev = null;
+    xs.forEach(x => {
+      const c = cols.get(x);
+      if(prev !== null){ ctx.moveTo(prev.x, yOf(prev.c.last)); ctx.lineTo(x, yOf(c.first)); }
+      ctx.moveTo(x, yOf(c.min));
+      ctx.lineTo(x, yOf(c.max));
+      prev = {x, c};
+    });
+    ctx.stroke();
+  }else{
+    // --- データが少ない場合：ふつうの折れ線 ---
+    ctx.beginPath();
+    valid.forEach((p, i) => {
+      const x = xOf(p.t), y = yOf(p[key]);
+      if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+}
+
+/** drawRange(ctx, points, xOf, yOf, color, minKey, maxKey)：日較差などの帯（塗り）を描く */
+function drawRange(ctx, points, xOf, yOf, color, minKey, maxKey){
+  const valid = points.filter(p => p[minKey] !== null && p[maxKey] !== null);
+  if(valid.length < 2) return;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  valid.forEach((p,i) => { const x = xOf(p.t), y = yOf(p[maxKey]); i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y); });
+  for(let i = valid.length-1; i >= 0; i--){ const p = valid[i]; ctx.lineTo(xOf(p.t), yOf(p[minKey])); }
+  ctx.closePath();
+  ctx.fill();
+}
+
+/**
+ * drawChart()
+ *   役割：画面の設定を読み取り、キャンバスにグラフ一式（枠・目盛り・線・凡例）を描く。
+ *        「グラフを表示」ボタンや設定変更のたびに呼ばれる。
+ */
+function drawChart(){
+  if(records.length === 0) return;
+
+  const fromStr = document.getElementById("fromDate").value;
+  const toStr   = document.getElementById("toDate").value;
+  if(!fromStr || !toStr) return;
+
+  let data = filterByPeriod(records, fromStr, toStr);
+  const mode = document.getElementById("smooth").value;
+  const daily = (mode === "daily" || mode === "dailyminmax");
+  if(daily) data = aggregateDaily(data);
+  viewPoints = data;
+
+  const showTemp = document.getElementById("showTemp").checked;
+  const showHum  = document.getElementById("showHum").checked;
+  const showBand = document.getElementById("showBand").checked;
+  const bandLow  = Number(document.getElementById("bandLow").value);
+  const bandHigh = Number(document.getElementById("bandHigh").value);
+  const tMin = Number(document.getElementById("tempMin").value);
+  const tMax = Number(document.getElementById("tempMax").value);
+
+  const canvas = document.getElementById("chart");
+  const ctx = canvas.getContext("2d");
+  // 画面の解像度に合わせて実ピクセル数を設定（ぼやけ防止）
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+  canvas.width  = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, cssW, cssH);
+
+  // --- グラフ本体（プロット領域）の位置 ---
+  const margin = {top: 74, right: 66, bottom: 46, left: 62};
+  const plot = {
+    x: margin.left, y: margin.top,
+    w: cssW - margin.left - margin.right,
+    h: cssH - margin.top  - margin.bottom
+  };
+  plotArea = plot;
+
+  const from = new Date(fromStr + "T00:00:00");
+  const to   = new Date(toStr   + "T00:00:00"); to.setDate(to.getDate()+1);
+
+  // --- 座標変換の関数（データの値 → 画面の座標） ---
+  const xOf = t => plot.x + (t - from) / (to - from) * plot.w;          // 日時 → 横位置
+  const yTemp = v => plot.y + plot.h - (v - tMin) / (tMax - tMin) * plot.h;  // 温度 → 縦位置
+  const yHum  = v => plot.y + plot.h - (v - 0) / (100 - 0) * plot.h;         // 湿度 → 縦位置（0〜100%固定）
+
+  // --- タイトル ---
+  const title = document.getElementById("titleInput").value.trim();
+  const fmtJ = s => { const d = new Date(s + "T00:00:00");
+    return d.getFullYear() + "年" + (d.getMonth()+1) + "月" + d.getDate() + "日"; };
+  ctx.fillStyle = "#222";
+  ctx.textAlign = "center";
+  ctx.font = "bold 17px sans-serif";
+  ctx.fillText(title || "温湿度記録", cssW/2, 26);
+  ctx.font = "12px sans-serif";
+  ctx.fillStyle = "#555";
+  ctx.fillText(fmtJ(fromStr) + " ～ " + fmtJ(toStr) +
+               (daily ? "（日平均）" : ""), cssW/2, 45);
+
+  // --- 目標湿度帯（網掛け） ---
+  if(showBand && showHum && bandHigh > bandLow){
+    ctx.fillStyle = "rgba(45,108,223,0.08)";
+    ctx.fillRect(plot.x, yHum(bandHigh), plot.w, yHum(bandLow) - yHum(bandHigh));
+    ctx.strokeStyle = "rgba(45,108,223,0.35)";
+    ctx.setLineDash([4,3]); ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(plot.x, yHum(bandHigh)); ctx.lineTo(plot.x+plot.w, yHum(bandHigh));
+    ctx.moveTo(plot.x, yHum(bandLow));  ctx.lineTo(plot.x+plot.w, yHum(bandLow));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // --- 横の補助線と左（温度）目盛り ---
+  const tempTicks = niceTicks(tMin, tMax, 8);
+  ctx.strokeStyle = "#e6e6e6"; ctx.lineWidth = 1;
+  ctx.font = "12px sans-serif";
+  tempTicks.forEach(v => {
+    const y = Math.round(yTemp(v)) + .5;
+    ctx.beginPath(); ctx.moveTo(plot.x, y); ctx.lineTo(plot.x + plot.w, y); ctx.stroke();
+    ctx.fillStyle = "var(--temp)"; ctx.fillStyle = "#d93a34";
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    ctx.fillText(v, plot.x - 8, y);
+  });
+  // --- 右（湿度）目盛り ---
+  ctx.fillStyle = "#2d6cdf"; ctx.textAlign = "left";
+  for(let v = 0; v <= 100; v += 10){
+    const y = Math.round(yHum(v)) + .5;
+    ctx.fillText(v, plot.x + plot.w + 8, y);
+  }
+  ctx.textBaseline = "alphabetic";
+
+  // --- 縦の補助線と横軸ラベル ---
+  const xTicks = makeXTicks(from, to);
+  ctx.textAlign = "center";
+  xTicks.forEach(tk => {
+    const x = Math.round(xOf(tk.t)) + .5;
+    if(x < plot.x || x > plot.x + plot.w) return;
+    ctx.strokeStyle = "#ececec";
+    ctx.beginPath(); ctx.moveTo(x, plot.y); ctx.lineTo(x, plot.y + plot.h); ctx.stroke();
+    ctx.strokeStyle = "#999";
+    ctx.beginPath(); ctx.moveTo(x, plot.y + plot.h); ctx.lineTo(x, plot.y + plot.h + 4); ctx.stroke();
+    ctx.fillStyle = "#444";
+    ctx.fillText(tk.label, x, plot.y + plot.h + 18);
+  });
+
+  // --- 折れ線本体 ---
+  if(mode === "dailyminmax"){
+    if(showHum)  drawRange(ctx, data, xOf, yHum,  "rgba(45,108,223,0.18)", "humMin",  "humMax");
+    if(showTemp) drawRange(ctx, data, xOf, yTemp, "rgba(217,58,52,0.18)",  "tempMin", "tempMax");
+  }
+  if(showHum)  drawSeries(ctx, data, xOf, yHum,  "#2d6cdf", "hum",  plot);
+  if(showTemp) drawSeries(ctx, data, xOf, yTemp, "#d93a34", "temp", plot);
+
+  // --- 外枠 ---
+  ctx.strokeStyle = "#666"; ctx.lineWidth = 1;
+  ctx.strokeRect(plot.x + .5, plot.y + .5, plot.w, plot.h);
+
+  // --- 軸の単位 ---
+  ctx.save();
+  ctx.translate(16, plot.y + plot.h/2); ctx.rotate(-Math.PI/2);
+  ctx.fillStyle = "#d93a34"; ctx.textAlign = "center"; ctx.font = "13px sans-serif";
+  ctx.fillText("温度（℃）", 0, 0);
+  ctx.restore();
+  ctx.save();
+  ctx.translate(cssW - 14, plot.y + plot.h/2); ctx.rotate(Math.PI/2);
+  ctx.fillStyle = "#2d6cdf"; ctx.textAlign = "center";
+  ctx.fillText("湿度（％）", 0, 0);
+  ctx.restore();
+
+  // --- 凡例（タイトルの下・グラフ枠の外に置いてデータ線と重ならないようにする） ---
+  const legend = [];
+  if(showTemp) legend.push(["#d93a34", "温度"]);
+  if(showHum)  legend.push(["#2d6cdf", "湿度"]);
+  if(legend.length){
+    ctx.font = "12px sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    const itemW = 68;                                  // 1項目あたりの幅
+    let lx = cssW/2 - (legend.length * itemW)/2;
+    const ly = 62;
+    legend.forEach(([color, label]) => {
+      ctx.strokeStyle = color; ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 26, ly); ctx.stroke();
+      ctx.fillStyle = "#333"; ctx.fillText(label, lx + 32, ly);
+      lx += itemW;
+    });
+    ctx.textBaseline = "alphabetic";
+  }
+
+  updateStats(filterByPeriod(records, fromStr, toStr));
+}
+
+/* =========================================================================
+   6. 統計表
+   ========================================================================= */
+
+/** updateStats(list)：期間内の最高・最低・平均を表にして表示する */
+function updateStats(list){
+  const s = computeStats(list);
+  const f = v => (v === null || v === undefined) ? "－" : v.toFixed(1);
+  const rows = [];
+  if(s.temp) rows.push(`<tr><td class="name">温度（℃）</td><td>${f(s.temp.max)}</td><td>${f(s.temp.min)}</td><td>${f(s.temp.avg)}</td><td>${f(s.temp.max - s.temp.min)}</td><td>${s.temp.n.toLocaleString()}</td></tr>`);
+  if(s.hum)  rows.push(`<tr><td class="name">湿度（％）</td><td>${f(s.hum.max)}</td><td>${f(s.hum.min)}</td><td>${f(s.hum.avg)}</td><td>${f(s.hum.max - s.hum.min)}</td><td>${s.hum.n.toLocaleString()}</td></tr>`);
+  document.getElementById("statsTable").innerHTML =
+    `<tr><th>項目</th><th>最高</th><th>最低</th><th>平均</th><th>変動幅</th><th>データ数</th></tr>` +
+    (rows.join("") || `<tr><td colspan="6">この期間のデータがありません</td></tr>`);
+  document.getElementById("statsPanel").classList.remove("hidden");
+}
+
+/* =========================================================================
+   7. 画面の操作（イベント）
+   ========================================================================= */
+
+const $ = id => document.getElementById(id);
+
+/* --- ファイル選択・ドラッグ＆ドロップ --- */
+$("dropZone").addEventListener("click", () => $("fileInput").click());
+$("dropZone").addEventListener("dragover", e => { e.preventDefault(); $("dropZone").classList.add("hover"); });
+$("dropZone").addEventListener("dragleave", () => $("dropZone").classList.remove("hover"));
+$("dropZone").addEventListener("drop", e => {
+  e.preventDefault(); $("dropZone").classList.remove("hover");
+  if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+$("fileInput").addEventListener("change", e => { if(e.target.files.length) handleFile(e.target.files[0]); });
+
+/**
+ * handleFile(file)
+ *   役割：ファイルが選ばれたときの一連の処理。
+ *        読み込み → 表に変換 → 列の候補を画面に出す → 自動判定で一度描画する。
+ */
+async function handleFile(file){
+  $("message").textContent = "";
+  try{
+    const text = await readFileAsText(file);
+    rawTable = parseCSV(text);
+    if(rawTable.length < 2) throw new Error("データ行が見つかりませんでした。CSVの内容をご確認ください。");
+
+    // 1行目が見出しかどうか（日時として読めなければ見出しとみなす）
+    const hasHeader = !parseDateTime(rawTable[0][0]);
+    headerRow = hasHeader ? rawTable[0] : rawTable[0].map((_, i) => "列" + (i+1));
+
+    // 列選択メニューを作る
+    ["colDate","colTime","colTemp","colHum"].forEach(id => {
+      const sel = $(id);
+      sel.innerHTML = (id === "colTime" ? `<option value="-1">（使わない）</option>` : "") +
+        headerRow.map((h,i) => `<option value="${i}">${i+1}: ${String(h).replace(/</g,"&lt;")}</option>`).join("");
+    });
+
+    const idx = guessColumns(headerRow, rawTable[hasHeader ? 1 : 0]);
+    $("colDate").value = idx.date;
+    $("colTime").value = idx.time;
+    $("colTemp").value = idx.temp;
+    $("colHum").value  = idx.hum;
+
+    $("fileInfo").textContent =
+      `読み込み：${file.name}（${rawTable.length.toLocaleString()}行 × ${headerRow.length}列）`;
+    $("columnPanel").classList.remove("hidden");
+
+    applyColumns(hasHeader);
+  }catch(err){
+    $("message").textContent = "エラー：" + err.message;
+  }
+}
+
+/**
+ * applyColumns(hasHeader)
+ *   役割：指定された列でデータを作り直し、期間の初期値を設定してグラフを描く。
+ */
+function applyColumns(hasHeader){
+  const idx = {
+    date: Number($("colDate").value),
+    time: Number($("colTime").value),
+    temp: Number($("colTemp").value),
+    hum:  Number($("colHum").value)
+  };
+  if(hasHeader === undefined) hasHeader = !parseDateTime(rawTable[0][idx.date]);
+  records = buildRecords(rawTable, idx, hasHeader);
+
+  if(records.length === 0){
+    $("message").textContent = "エラー：日時として読める行がありませんでした。「日時の列」の指定をご確認ください。";
+    return;
+  }
+  $("message").textContent = "";
+
+  const first = records[0].t, last = records[records.length-1].t;
+  $("fromDate").value = ymd(first);
+  $("toDate").value   = ymd(last);
+  $("fromDate").min = $("toDate").min = ymd(first);
+  $("fromDate").max = $("toDate").max = ymd(last);
+  if(!$("titleInput").value) $("titleInput").value = "温湿度記録";
+
+  // 「月単位」プルダウンを作る
+  const months = new Set();
+  records.forEach(r => months.add(r.t.getFullYear() + "-" + String(r.t.getMonth()+1).padStart(2,"0")));
+  $("monthSelect").innerHTML = `<option value="">（選択）</option>` +
+    [...months].sort().map(m => {
+      const [y, mo] = m.split("-");
+      return `<option value="${m}">${y}年${Number(mo)}月</option>`;
+    }).join("");
+
+  // データが多いときは自動で日平均表示にする（1年分などを見やすくするため）
+  const spanDays = (last - first) / 86400000;
+  $("smooth").value = (spanDays > 120 && records.length > 20000) ? "daily" : "raw";
+
+  // 温度軸の初期値をデータに合わせる
+  const temps = records.map(r => r.temp).filter(v => v !== null);
+  if(temps.length){
+    // 線が枠の上下にくっつかないよう、少し余裕（1℃）をもたせてから5℃刻みに丸める
+    $("tempMin").value = Math.floor((Math.min(...temps) - 1)/5)*5;
+    $("tempMax").value = Math.ceil ((Math.max(...temps) + 1)/5)*5;
+  }
+
+  $("controlPanel").classList.remove("hidden");
+  $("chartPanel").classList.remove("hidden");
+  $("fileInfo").textContent += `　→ 有効データ ${records.length.toLocaleString()}件（${ymd(first)} 〜 ${ymd(last)}）`;
+  drawChart();
+}
+
+$("applyColumns").addEventListener("click", () => applyColumns());
+$("drawBtn").addEventListener("click", drawChart);
+
+/* --- 設定を変えたら描き直す --- */
+["fromDate","toDate","showTemp","showHum","showBand","bandLow","bandHigh","smooth","tempMin","tempMax","titleInput"]
+  .forEach(id => $(id).addEventListener("change", drawChart));
+
+/* --- 期間の簡易選択ボタン --- */
+document.querySelectorAll("[data-preset]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if(records.length === 0) return;
+    const last  = records[records.length-1].t;
+    const first = records[0].t;
+    const from = new Date(last);
+    switch(btn.dataset.preset){
+      case "all":    from.setTime(first.getTime()); break;
+      case "year":   from.setFullYear(from.getFullYear()-1); break;
+      case "3month": from.setMonth(from.getMonth()-3); break;
+      case "month":  from.setMonth(from.getMonth()-1); break;
+      case "week":   from.setDate(from.getDate()-7); break;
+    }
+    $("fromDate").value = ymd(from < first ? first : from);
+    $("toDate").value   = ymd(last);
+    drawChart();
+  });
+});
+
+/* --- 月単位の選択 --- */
+$("monthSelect").addEventListener("change", e => {
+  if(!e.target.value) return;
+  const [y, m] = e.target.value.split("-").map(Number);
+  $("fromDate").value = ymd(new Date(y, m-1, 1));
+  $("toDate").value   = ymd(new Date(y, m, 0));   // 0日 = 前月の末日
+  drawChart();
+});
+
+/* --- PNG保存 --- */
+$("pngBtn").addEventListener("click", () => {
+  const canvas = $("chart");
+  const a = document.createElement("a");
+  a.download = ($("titleInput").value.trim() || "温湿度グラフ") + "_" +
+               $("fromDate").value + "_" + $("toDate").value + ".png";
+  a.href = canvas.toDataURL("image/png");
+  a.click();
+});
+
+/* --- 印刷 --- */
+$("printBtn").addEventListener("click", () => window.print());
+
+/* --- ウィンドウ幅が変わったら描き直す --- */
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(drawChart, 200);
+});
+
+/* --- マウスを乗せた位置の値を表示（ツールチップ） --- */
+$("chart").addEventListener("mousemove", e => {
+  if(!plotArea || viewPoints.length === 0) return;
+  const rect = e.target.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  if(x < plotArea.x || x > plotArea.x + plotArea.w){ $("tooltip").style.display = "none"; return; }
+
+  const from = new Date($("fromDate").value + "T00:00:00");
+  const to   = new Date($("toDate").value   + "T00:00:00"); to.setDate(to.getDate()+1);
+  const targetTime = from.getTime() + (x - plotArea.x) / plotArea.w * (to - from);
+
+  // 一番近い時刻の点を探す（二分探索）
+  let lo = 0, hi = viewPoints.length - 1;
+  while(lo < hi){
+    const mid = (lo + hi) >> 1;
+    if(viewPoints[mid].t.getTime() < targetTime) lo = mid + 1; else hi = mid;
+  }
+  const p = viewPoints[lo];
+  const d = p.t;
+  const pad = n => String(n).padStart(2,"0");
+  const tip = $("tooltip");
+  tip.innerHTML =
+    `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}<br>` +
+    (p.temp !== null && p.temp !== undefined ? `温度 ${p.temp.toFixed(1)} ℃<br>` : "") +
+    (p.hum  !== null && p.hum  !== undefined ? `湿度 ${p.hum.toFixed(1)} ％` : "");
+  tip.style.display = "block";
+  tip.style.left = x + "px";
+  tip.style.top  = (e.clientY - rect.top) + "px";
+});
+$("chart").addEventListener("mouseleave", () => { $("tooltip").style.display = "none"; });
+</script>
+
+<style media="print">
+  header, #dropZone, #columnPanel, #controlPanel, .note, #message, #fileInfo{display:none !important;}
+  body{background:#fff;}
+  .panel{border:none; padding:0;}
+</style>
+</body>
+</html>
