@@ -91,7 +91,7 @@
 <main>
 
   <!-- ============ 1. CSV読み込み ============ -->
-  <section class="panel">
+  <section class="panel" id="uploadPanel">
     <h2>1. CSVファイルの読み込み</h2>
     <div id="dropZone">
       <strong>ここにCSVファイルをドラッグ＆ドロップ</strong>
@@ -166,6 +166,8 @@
       <label><input type="checkbox" id="showTemp" checked> 温度を表示</label>
       <label><input type="checkbox" id="showHum" checked> 湿度を表示</label>
       <label><input type="checkbox" id="showBand" checked> 目標湿度帯を表示</label>
+      <label><input type="checkbox" id="showStats" checked> 集計表を画面に表示</label>
+      <label><input type="checkbox" id="printStats"> 集計表を印刷にも含める</label>
       <div class="field">
         <label for="bandLow">目標湿度 下限(%)</label>
         <input type="number" id="bandLow" value="55" min="0" max="100" step="1" style="width:80px">
@@ -186,7 +188,8 @@
         <label for="tempMin">温度軸 最小/最大(℃)</label>
         <span>
           <input type="number" id="tempMin" value="0" step="5" style="width:70px">
-          <input type="number" id="tempMax" value="40" step="5" style="width:70px">
+          <input type="number" id="tempMax" value="100" step="5" style="width:70px">
+          <button id="autoAxis" class="sub" style="padding:4px 8px;font-size:12px;">自動</button>
         </span>
       </div>
     </div>
@@ -395,7 +398,19 @@ function toNumber(s){
  */
 function guessColumns(header, sampleRow){
   const idx = {date:-1, time:-1, temp:-1, hum:-1};
+
+  // 【最優先】データロガー（おんどとり等）の標準的な列名をそのまま既定にする
+  //   Date/Time … 日時 ／ No.1 … 温度 ／ No.2 … 湿度
   header.forEach((name, i) => {
+    const h = toHalfWidth(String(name)).toLowerCase().replace(/\s+/g, "");
+    if(idx.date < 0 && /^date\/?time$/.test(h))            idx.date = i;   // Date/Time, DateTime
+    if(idx.temp < 0 && /^(no|ch)\.?1\b|^(no|ch)\.?1$/.test(h)) idx.temp = i;   // No.1, No1, CH1
+    if(idx.hum  < 0 && /^(no|ch)\.?2\b|^(no|ch)\.?2$/.test(h)) idx.hum  = i;   // No.2, No2, CH2
+  });
+
+  // 上で決まらなかった列を、一般的な見出し語（温度・湿度・日時 など）から判定する
+  header.forEach((name, i) => {
+    if(i === idx.date || i === idx.temp || i === idx.hum) return;
     const h = toHalfWidth(String(name)).toLowerCase();
     if(idx.hum  < 0 && /湿度|humid|rh|%/.test(h))                    idx.hum  = i;
     else if(idx.temp < 0 && /温度|気温|temp|℃|°c/.test(h))           idx.temp = i;
@@ -698,7 +713,7 @@ function drawChart(){
   }
 
   // --- 横の補助線と左（温度）目盛り ---
-  const tempTicks = niceTicks(tMin, tMax, 8);
+  const tempTicks = niceTicks(tMin, tMax, 10);
   ctx.strokeStyle = "#e6e6e6"; ctx.lineWidth = 1;
   ctx.font = "12px sans-serif";
   tempTicks.forEach(v => {
@@ -789,7 +804,9 @@ function updateStats(list){
   document.getElementById("statsTable").innerHTML =
     `<tr><th>項目</th><th>最高</th><th>最低</th><th>平均</th><th>変動幅</th><th>データ数</th></tr>` +
     (rows.join("") || `<tr><td colspan="6">この期間のデータがありません</td></tr>`);
-  document.getElementById("statsPanel").classList.remove("hidden");
+  // 「集計表を画面に表示」のチェックに従って表示・非表示を切り替える
+  const panel = document.getElementById("statsPanel");
+  panel.classList.toggle("hidden", !document.getElementById("showStats").checked);
 }
 
 /* =========================================================================
@@ -887,13 +904,10 @@ function applyColumns(hasHeader){
   const spanDays = (last - first) / 86400000;
   $("smooth").value = (spanDays > 120 && records.length > 20000) ? "daily" : "raw";
 
-  // 温度軸の初期値をデータに合わせる
-  const temps = records.map(r => r.temp).filter(v => v !== null);
-  if(temps.length){
-    // 線が枠の上下にくっつかないよう、少し余裕（1℃）をもたせてから5℃刻みに丸める
-    $("tempMin").value = Math.floor((Math.min(...temps) - 1)/5)*5;
-    $("tempMax").value = Math.ceil ((Math.max(...temps) + 1)/5)*5;
-  }
+  // 温度軸は既定で 0〜100℃（湿度軸と目盛りをそろえる）。
+  // データに合わせて拡大したいときは「自動」ボタンを押す。
+  $("tempMin").value = 0;
+  $("tempMax").value = 100;
 
   $("controlPanel").classList.remove("hidden");
   $("chartPanel").classList.remove("hidden");
@@ -902,11 +916,31 @@ function applyColumns(hasHeader){
 }
 
 $("applyColumns").addEventListener("click", () => applyColumns());
+
+/**
+ * fitTempAxis()
+ *   役割：「自動」ボタン用。表示中の期間の温度に合わせて温度軸の最小・最大を決める。
+ *        線が枠にくっつかないよう1℃の余裕をとり、5℃刻みに丸める。
+ */
+function fitTempAxis(){
+  const list = filterByPeriod(records, $("fromDate").value, $("toDate").value);
+  const temps = list.map(r => r.temp).filter(v => v !== null);
+  if(temps.length === 0) return;
+  $("tempMin").value = Math.floor((Math.min(...temps) - 1)/5)*5;
+  $("tempMax").value = Math.ceil ((Math.max(...temps) + 1)/5)*5;
+  drawChart();
+}
+$("autoAxis").addEventListener("click", fitTempAxis);
 $("drawBtn").addEventListener("click", drawChart);
 
 /* --- 設定を変えたら描き直す --- */
-["fromDate","toDate","showTemp","showHum","showBand","bandLow","bandHigh","smooth","tempMin","tempMax","titleInput"]
+["fromDate","toDate","showTemp","showHum","showBand","bandLow","bandHigh","smooth","tempMin","tempMax","titleInput","showStats"]
   .forEach(id => $(id).addEventListener("change", drawChart));
+
+/* --- 印刷のときだけ、集計表を出すかどうかを body の目印（class）で切り替える --- */
+$("printStats").addEventListener("change", () => {
+  document.body.classList.toggle("print-stats", $("printStats").checked);
+});
 
 /* --- 期間の簡易選択ボタン --- */
 document.querySelectorAll("[data-preset]").forEach(btn => {
@@ -948,7 +982,11 @@ $("pngBtn").addEventListener("click", () => {
 });
 
 /* --- 印刷 --- */
-$("printBtn").addEventListener("click", () => window.print());
+$("printBtn").addEventListener("click", () => {
+  // 印刷直前に、集計表を含めるかどうかの指定を body に反映してから印刷する
+  document.body.classList.toggle("print-stats", $("printStats").checked);
+  window.print();
+});
 
 /* --- ウィンドウ幅が変わったら描き直す --- */
 let resizeTimer = null;
@@ -990,9 +1028,16 @@ $("chart").addEventListener("mouseleave", () => { $("tooltip").style.display = "
 </script>
 
 <style media="print">
-  header, #dropZone, #columnPanel, #controlPanel, .note, #message, #fileInfo{display:none !important;}
+  /* 印刷・PDF ではグラフだけを出す（操作パネルや説明は印刷しない） */
+  header, #uploadPanel, #columnPanel, #controlPanel, .note, #message, #fileInfo{display:none !important;}
   body{background:#fff;}
-  .panel{border:none; padding:0;}
+  main{padding:0; max-width:none;}
+  .panel{border:none; padding:0; margin:0;}
+  /* 集計表は「集計表を印刷にも含める」にチェックが入っているときだけ印刷する */
+  #statsPanel{display:none !important;}
+  body.print-stats #statsPanel{display:block !important; margin-top:12px;}
+  body.print-stats #statsPanel h2{display:block;}
+  @page{ size: landscape; margin: 12mm; }
 </style>
 </body>
 </html>
