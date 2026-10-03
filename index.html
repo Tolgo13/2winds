@@ -62,6 +62,24 @@
   .chips button{padding:4px 10px; font-size:12px;}
   .checks{display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin-top:12px;}
   .checks label{font-size:13px; display:flex; align-items:center; gap:5px;}
+  textarea{
+    padding:6px 8px; border:1px solid #b0bec5; border-radius:4px;
+    font-family:inherit; font-size:13px; width:100%; resize:vertical;
+  }
+  .block{margin-top:14px; padding-top:12px; border-top:1px dashed #d7d7d7;}
+  /* 1番の枠：CSV読み込み後は見出しだけに縮める */
+  #uploadPanel h2{cursor:pointer; user-select:none;}
+  #uploadPanel h2 .sub-label{font-weight:400; font-size:12px; color:var(--muted); margin-left:10px;}
+  #uploadPanel.collapsed{padding:10px 16px;}
+  #uploadPanel.collapsed h2{margin:0;}
+  #uploadPanel.collapsed #dropZone,
+  #uploadPanel.collapsed .note,
+  #uploadPanel.collapsed #fileInfo{display:none;}
+  /* グラフ下の文章欄 */
+  #noteView{
+    padding:4px 16px 10px; font-size:13px; line-height:1.8;
+    white-space:pre-wrap; word-break:break-all; color:#222;
+  }
   /* ---- グラフ ---- */
   #chartWrap{position:relative; background:#fff;}
   canvas{width:100%; height:520px; display:block;}
@@ -92,7 +110,7 @@
 
   <!-- ============ 1. CSV読み込み ============ -->
   <section class="panel" id="uploadPanel">
-    <h2>1. CSVファイルの読み込み</h2>
+    <h2 id="uploadHeader">1. CSVファイルの読み込み<span class="sub-label" id="loadedName"></span></h2>
     <div id="dropZone">
       <strong>ここにCSVファイルをドラッグ＆ドロップ</strong>
       <span>または クリックしてファイルを選択（文字コードは UTF-8 / Shift_JIS 自動判定）</span>
@@ -193,6 +211,37 @@
         </span>
       </div>
     </div>
+
+    <!-- 凡例に出す名前（グラフ上でどちらが温度・湿度か分かるようにする） -->
+    <div class="row block">
+      <div class="field">
+        <label for="tempLabel">温度の表示名（凡例）</label>
+        <input type="text" id="tempLabel" value="温度（赤線）" size="18">
+      </div>
+      <div class="field">
+        <label for="humLabel">湿度の表示名（凡例）</label>
+        <input type="text" id="humLabel" value="湿度（青線）" size="18">
+      </div>
+    </div>
+
+    <!-- グラフの下に出す文章 -->
+    <div class="row block" style="align-items:flex-start;">
+      <div class="field" style="flex:1 1 460px;">
+        <label for="noteText">グラフ下の文章（備考・考察など／改行できます）</label>
+        <textarea id="noteText" rows="3" placeholder="例：7月下旬に湿度が目標範囲（55〜65%）を上回った。除湿機を増設して対応した。"></textarea>
+      </div>
+      <div class="field">
+        <label for="noteAlign">文章の位置</label>
+        <select id="noteAlign">
+          <option value="left">左寄せ</option>
+          <option value="center">中央寄せ</option>
+          <option value="right">右寄せ</option>
+        </select>
+      </div>
+      <label style="font-size:13px; display:flex; align-items:center; gap:5px; padding-bottom:6px;">
+        <input type="checkbox" id="printNote" checked> 文章を印刷に含める
+      </label>
+    </div>
   </section>
 
   <!-- ============ 4. グラフ ============ -->
@@ -201,6 +250,7 @@
       <canvas id="chart"></canvas>
       <div id="tooltip"></div>
     </div>
+    <div id="noteView"></div>
   </section>
 
   <!-- ============ 5. 統計 ============ -->
@@ -771,23 +821,26 @@ function drawChart(){
 
   // --- 凡例（タイトルの下・グラフ枠の外に置いてデータ線と重ならないようにする） ---
   const legend = [];
-  if(showTemp) legend.push(["#d93a34", "温度"]);
-  if(showHum)  legend.push(["#2d6cdf", "湿度"]);
+  if(showTemp) legend.push(["#d93a34", document.getElementById("tempLabel").value || "温度"]);
+  if(showHum)  legend.push(["#2d6cdf", document.getElementById("humLabel").value  || "湿度"]);
   if(legend.length){
     ctx.font = "12px sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
-    const itemW = 68;                                  // 1項目あたりの幅
-    let lx = cssW/2 - (legend.length * itemW)/2;
+    // 入力された名前の長さに合わせて、各項目の幅と全体の開始位置を計算する
+    const widths = legend.map(([, label]) => 26 + 6 + ctx.measureText(label).width + 26);
+    const totalW = widths.reduce((a, b) => a + b, 0);
+    let lx = cssW/2 - totalW/2;
     const ly = 62;
-    legend.forEach(([color, label]) => {
+    legend.forEach(([color, label], i) => {
       ctx.strokeStyle = color; ctx.lineWidth = 2.4;
       ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 26, ly); ctx.stroke();
       ctx.fillStyle = "#333"; ctx.fillText(label, lx + 32, ly);
-      lx += itemW;
+      lx += widths[i];
     });
     ctx.textBaseline = "alphabetic";
   }
 
   updateStats(filterByPeriod(records, fromStr, toStr));
+  updateNote();
 }
 
 /* =========================================================================
@@ -809,11 +862,34 @@ function updateStats(list){
   panel.classList.toggle("hidden", !document.getElementById("showStats").checked);
 }
 
+/**
+ * updateNote()
+ *   役割：入力された文章をグラフの下に表示し、寄せ（左・中央・右）を反映する。
+ *        文章が空のときは欄ごと隠す。
+ */
+function updateNote(){
+  const view  = document.getElementById("noteView");
+  const text  = document.getElementById("noteText").value;
+  const align = document.getElementById("noteAlign").value;
+  view.textContent = text;                       // textContent なので HTML は実行されない（安全）
+  view.style.textAlign = align;
+  view.style.display = text.trim() === "" ? "none" : "block";
+}
+
 /* =========================================================================
    7. 画面の操作（イベント）
    ========================================================================= */
 
 const $ = id => document.getElementById(id);
+
+/* --- 1番の枠（CSV読み込み）の開閉：見出しをクリックすると開いたり閉じたりする --- */
+$("uploadHeader").addEventListener("click", () => {
+  const panel = $("uploadPanel");
+  panel.classList.toggle("collapsed");
+  $("loadedName").textContent = panel.classList.contains("collapsed")
+    ? loadedFileName : "";
+});
+let loadedFileName = "";   // 読み込んだファイル名（見出しに表示するために覚えておく）
 
 /* --- ファイル選択・ドラッグ＆ドロップ --- */
 $("dropZone").addEventListener("click", () => $("fileInput").click());
@@ -857,6 +933,11 @@ async function handleFile(file){
     $("fileInfo").textContent =
       `読み込み：${file.name}（${rawTable.length.toLocaleString()}行 × ${headerRow.length}列）`;
     $("columnPanel").classList.remove("hidden");
+
+    // 読み込めたら 1番の枠は見出しだけに縮める（もう一度開きたいときは見出しをクリック）
+    loadedFileName = "（" + file.name + " を読み込み済み／クリックで開く）";
+    $("uploadPanel").classList.add("collapsed");
+    $("loadedName").textContent = loadedFileName;
 
     applyColumns(hasHeader);
   }catch(err){
@@ -937,6 +1018,17 @@ $("drawBtn").addEventListener("click", drawChart);
 ["fromDate","toDate","showTemp","showHum","showBand","bandLow","bandHigh","smooth","tempMin","tempMax","titleInput","showStats"]
   .forEach(id => $(id).addEventListener("change", drawChart));
 
+/* --- 文章欄：入力・寄せの変更をすぐ画面に反映する --- */
+$("noteText").addEventListener("input", updateNote);
+$("noteAlign").addEventListener("change", updateNote);
+["tempLabel","humLabel"].forEach(id => $(id).addEventListener("input", drawChart));
+
+/* --- 印刷のときだけ、文章を出すかどうかを body の目印（class）で切り替える --- */
+$("printNote").addEventListener("change", () => {
+  document.body.classList.toggle("print-note", $("printNote").checked);
+});
+document.body.classList.add("print-note");   // 初期値はチェック済み（印刷に含める）
+
 /* --- 印刷のときだけ、集計表を出すかどうかを body の目印（class）で切り替える --- */
 $("printStats").addEventListener("change", () => {
   document.body.classList.toggle("print-stats", $("printStats").checked);
@@ -971,19 +1063,72 @@ $("monthSelect").addEventListener("change", e => {
   drawChart();
 });
 
-/* --- PNG保存 --- */
+/**
+ * wrapText(ctx, text, maxWidth)
+ *   役割：文章を、指定した幅で折り返した「1行ずつの配列」にする（PNG保存用）。
+ *        日本語は単語の区切りがないので1文字ずつ幅をはかって折り返す。
+ */
+function wrapText(ctx, text, maxWidth){
+  const lines = [];
+  text.split(/\n/).forEach(para => {
+    let line = "";
+    for(const ch of para){
+      if(line !== "" && ctx.measureText(line + ch).width > maxWidth){ lines.push(line); line = ch; }
+      else line += ch;
+    }
+    lines.push(line);
+  });
+  return lines;
+}
+
+/**
+ * buildExportCanvas()
+ *   役割：PNG保存用の画像を作る。文章を入れる設定なら、グラフの下に文章を描き足す。
+ *   戻り値：保存用のキャンバス
+ */
+function buildExportCanvas(){
+  const src  = $("chart");
+  const text = $("noteText").value.trim();
+  const include = $("printNote").checked && text !== "";
+  if(!include) return src;
+
+  const dpr   = window.devicePixelRatio || 1;
+  const align = $("noteAlign").value;
+  const pad   = 24 * dpr;                      // 左右の余白
+  const size  = 13 * dpr;                      // 文字の大きさ
+  const lineH = size * 1.8;
+
+  const tmp = document.createElement("canvas");
+  const c   = tmp.getContext("2d");
+  c.font = size + "px sans-serif";
+  const lines = wrapText(c, text, src.width - pad*2);
+
+  tmp.width  = src.width;
+  tmp.height = src.height + lines.length * lineH + 16 * dpr;
+  const ctx = tmp.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, tmp.width, tmp.height);
+  ctx.drawImage(src, 0, 0);
+  ctx.font = size + "px sans-serif";
+  ctx.fillStyle = "#222";
+  ctx.textAlign = align === "center" ? "center" : (align === "right" ? "right" : "left");
+  const x = align === "center" ? tmp.width/2 : (align === "right" ? tmp.width - pad : pad);
+  lines.forEach((line, i) => ctx.fillText(line, x, src.height + 8*dpr + lineH*(i+1) - lineH*0.25));
+  return tmp;
+}
+
+/* --- PNG保存（グラフ＋文章） --- */
 $("pngBtn").addEventListener("click", () => {
-  const canvas = $("chart");
   const a = document.createElement("a");
   a.download = ($("titleInput").value.trim() || "温湿度グラフ") + "_" +
                $("fromDate").value + "_" + $("toDate").value + ".png";
-  a.href = canvas.toDataURL("image/png");
+  a.href = buildExportCanvas().toDataURL("image/png");
   a.click();
 });
 
 /* --- 印刷 --- */
 $("printBtn").addEventListener("click", () => {
-  // 印刷直前に、集計表を含めるかどうかの指定を body に反映してから印刷する
+  // 印刷直前に、文章と集計表を含めるかどうかの指定を body に反映してから印刷する
+  document.body.classList.toggle("print-note",  $("printNote").checked);
   document.body.classList.toggle("print-stats", $("printStats").checked);
   window.print();
 });
@@ -1033,6 +1178,9 @@ $("chart").addEventListener("mouseleave", () => { $("tooltip").style.display = "
   body{background:#fff;}
   main{padding:0; max-width:none;}
   .panel{border:none; padding:0; margin:0;}
+  /* 文章は「文章を印刷に含める」にチェックが入っているときだけ印刷する */
+  #noteView{display:none !important;}
+  body.print-note #noteView{display:block !important; padding:6px 0 0;}
   /* 集計表は「集計表を印刷にも含める」にチェックが入っているときだけ印刷する */
   #statsPanel{display:none !important;}
   body.print-stats #statsPanel{display:block !important; margin-top:12px;}
