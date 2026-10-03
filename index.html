@@ -216,11 +216,11 @@
     <div class="row block">
       <div class="field">
         <label for="tempLabel">温度の表示名（凡例）</label>
-        <input type="text" id="tempLabel" value="温度（赤線）" size="18">
+        <input type="text" id="tempLabel" value="温度" size="18">
       </div>
       <div class="field">
         <label for="humLabel">湿度の表示名（凡例）</label>
-        <input type="text" id="humLabel" value="湿度（青線）" size="18">
+        <input type="text" id="humLabel" value="湿度" size="18">
       </div>
     </div>
 
@@ -1018,6 +1018,62 @@ $("drawBtn").addEventListener("click", drawChart);
 ["fromDate","toDate","showTemp","showHum","showBand","bandLow","bandHigh","smooth","tempMin","tempMax","titleInput","showStats"]
   .forEach(id => $(id).addEventListener("change", drawChart));
 
+/**
+ * printNoteLines()
+ *   役割：印刷に出る文章が何行になるかを数える。
+ *        改行の数と、画面での折り返しを含む実際の行数の、多いほうを採用する。
+ *   戻り値：行数（印刷しない設定や空欄のときは 0）
+ */
+function printNoteLines(){
+  const text = $("noteText").value;
+  if(!$("printNote").checked || text.trim() === "") return 0;
+  const view = $("noteView");
+  const cs = getComputedStyle(view);
+  const lineH = parseFloat(cs.lineHeight) || 23;
+  const inner = view.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const shown  = Math.max(1, Math.round(inner / lineH));   // 折り返しを含む表示行数
+  const breaks = text.split(/\n/).length;                  // 改行で数えた行数
+  return Math.max(shown, breaks);
+}
+
+/**
+ * applyPrintLayout()
+ *   役割：印刷の直前に、文章の行数に応じて体裁を決める。
+ *        ・文章が1〜3行 … グラフの高さを少し詰めて、グラフ＋文章＋集計表を1ページに収める
+ *        ・文章が4行以上 … 集計表だけを次のページに送る
+ *        目印として body に class を付け、実際の調整は印刷用CSSが行う。
+ */
+let printAdjusted = false;   // 印刷用にグラフの高さを変えたかどうかの目印
+
+function applyPrintLayout(){
+  const n = printNoteLines();
+  const withStats = $("printStats").checked;
+  document.body.classList.remove("stats-newpage");
+
+  let h = 520;                            // ふだんのグラフの高さ（px）
+  if(withStats){
+    if(n >= 4)       document.body.classList.add("stats-newpage");  // 集計表は次ページへ
+    else if(n === 3) h = 480;             // 文章3行 → グラフを少し詰めて1ページに収める
+    else if(n === 2) h = 500;             // 文章2行 → 同上
+  }
+  const canvas = $("chart");
+  if(canvas.clientHeight !== h){
+    canvas.style.height = h + "px";
+    drawChart();                          // 新しい高さで描き直す（縦に潰れない）
+    printAdjusted = true;
+  }
+}
+
+/** 印刷が終わったら、グラフの高さを元に戻して描き直す */
+function restoreScreenLayout(){
+  if(!printAdjusted) return;
+  $("chart").style.height = "";
+  printAdjusted = false;
+  drawChart();
+}
+window.addEventListener("beforeprint", applyPrintLayout);
+window.addEventListener("afterprint",  restoreScreenLayout);
+
 /* --- 文章欄：入力・寄せの変更をすぐ画面に反映する --- */
 $("noteText").addEventListener("input", updateNote);
 $("noteAlign").addEventListener("change", updateNote);
@@ -1130,7 +1186,10 @@ $("printBtn").addEventListener("click", () => {
   // 印刷直前に、文章と集計表を含めるかどうかの指定を body に反映してから印刷する
   document.body.classList.toggle("print-note",  $("printNote").checked);
   document.body.classList.toggle("print-stats", $("printStats").checked);
+  applyPrintLayout();          // 文章の行数に応じて1ページに収める／改ページする
   window.print();
+  // afterprint が働かないブラウザのための保険として、少し後に画面の高さへ戻す
+  setTimeout(restoreScreenLayout, 800);
 });
 
 /* --- ウィンドウ幅が変わったら描き直す --- */
@@ -1183,8 +1242,14 @@ $("chart").addEventListener("mouseleave", () => { $("tooltip").style.display = "
   body.print-note #noteView{display:block !important; padding:6px 0 0;}
   /* 集計表は「集計表を印刷にも含める」にチェックが入っているときだけ印刷する */
   #statsPanel{display:none !important;}
-  body.print-stats #statsPanel{display:block !important; margin-top:12px;}
-  body.print-stats #statsPanel h2{display:block;}
+  body.print-stats #statsPanel{display:block !important; margin-top:8px;}
+  /* 1ページに収まるよう、印刷の集計表は小さめの体裁にする */
+  #statsPanel h2{font-size:12px; margin:0 0 4px; padding-left:6px; border-left-width:3px;}
+  #statsPanel th, #statsPanel td{padding:3px 8px; font-size:11px;}
+  /* グラフと集計表は、途中で改ページされないようにする */
+  #chartPanel, #statsPanel{break-inside:avoid; page-break-inside:avoid;}
+  /* 文章が4行以上のときは、集計表を次のページに送る */
+  body.stats-newpage #statsPanel{break-before:page; page-break-before:always; margin-top:0;}
   @page{ size: landscape; margin: 12mm; }
 </style>
 </body>
