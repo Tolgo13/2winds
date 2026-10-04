@@ -6,48 +6,55 @@
 <title>2Winds Pro Ver1.0</title>
 <style>
   :root{
-    --bg:#000; --panel:#1a1a1a; --border:#333; --text:#ccc; --text-dim:#888;
-    --blue:#4682b4; --blue-h:#5f9ea0; --green:#2e8b57; --green-h:#3cb371;
-    --gray:#333; --gray-h:#444; --sync:#2c5a8f; --sync-h:#3a6ba5;
-    --purple:#8e44ad; --purple-h:#9b59b6; --teal:#16a085; --teal-h:#1abc9c;
-    --match:#2980b9; --match-h:#3498db;
-    --info-bg:#333;
+    --bg:#1e1e1e; --surface:#2d2d2d; --surface-2:#252526; --border:#3c3c3c; --border-2:#555555;
+    --text:#ffffff; --text-2:#cccccc; --text-3:#aaaaaa; --muted:#7a7a7a;
+    --accent:#4a9eff; --accent-press:#2a7edf;
+    color-scheme:dark;
   }
   *{box-sizing:border-box;}
   [hidden]{display:none !important;}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
-    font-family:"Segoe UI","Meiryo","Yu Gothic UI",sans-serif;overflow:hidden;}
+    font:13px/1.45 "Yu Gothic UI","Yu Gothic",YuGothic,Meiryo,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;overflow:hidden;}
   #app{display:flex;flex-direction:column;height:100vh;}
-  header{display:flex;align-items:center;gap:12px;padding:6px 12px;background:#111;border-bottom:1px solid var(--border);}
-  header h1{font-size:15px;margin:0;font-weight:bold;color:#fff;white-space:nowrap;}
-  header h1 small{font-size:11px;color:var(--text-dim);font-weight:normal;margin-left:4px;}
-  header .hint{font-size:11px;color:var(--text-dim);}
+  header{display:flex;align-items:center;gap:12px;padding:6px 10px;min-height:36px;background:var(--surface);border-bottom:1px solid var(--border);}
+  header h1{font-size:13px;margin:0;font-weight:600;color:var(--text-2);white-space:nowrap;}
+  header h1 b{color:var(--text);}
+  header h1 small{font-size:11px;color:var(--text-3);font-weight:normal;margin-left:6px;}
+  header .hint{font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   #main{flex:1;display:flex;min-height:0;}
-  .pane{flex:1;display:flex;flex-direction:column;min-width:0;padding:6px;gap:6px;overflow-y:auto;overflow-x:hidden;}
-  .center{width:152px;display:flex;flex-direction:column;justify-content:center;gap:8px;padding:6px 4px;overflow-y:auto;}
-  .center hr{width:100%;border:0;border-top:1px solid var(--border);margin:2px 0;}
-  .center .ttl{font-size:11px;color:var(--text-dim);text-align:center;}
+  .pane{flex:1;display:flex;flex-direction:column;min-width:0;padding:8px;gap:6px;overflow-y:auto;overflow-x:hidden;}
+  .center{width:122px;flex:none;display:flex;flex-direction:column;justify-content:center;align-items:stretch;gap:6px;
+    padding:8px 8px;overflow-y:auto;border-left:1px solid var(--border);border-right:1px solid var(--border);background:var(--surface-2);}
+  .center .ttl{font-size:11px;color:var(--muted);text-align:center;margin-top:2px;}
 
   /* folder row */
   .folder-row{display:flex;align-items:center;gap:8px;min-width:0;}
-  .folder-label{color:var(--text);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  button,select,input{font-family:inherit;}
-  button{border:none;color:#fff;font-size:12px;border-radius:3px;padding:2px 8px;
-    min-height:25px;cursor:pointer;white-space:nowrap;}
-  button:disabled{opacity:.4;cursor:default;}
-  .btn-folder{background:var(--gray);} .btn-folder:hover:not(:disabled){background:var(--gray-h);}
-  .btn-nav{background:var(--blue);} .btn-nav:hover:not(:disabled){background:var(--blue-h);}
-  .btn-save{background:var(--green);} .btn-save:hover:not(:disabled){background:var(--green-h);}
-  .btn-sync{background:var(--sync);font-weight:bold;padding:8px 4px;} .btn-sync:hover:not(:disabled){background:var(--sync-h);}
-  .btn-reset{background:var(--gray);font-size:11px;padding:6px 4px;} .btn-reset:hover{background:var(--gray-h);}
-  .btn-tool{background:var(--purple);} .btn-tool:hover:not(:disabled){background:var(--purple-h);}
-  .btn-tool.plain{background:var(--gray);} .btn-tool.plain:hover:not(:disabled){background:var(--gray-h);}
-  .btn-match{background:var(--match);font-weight:bold;padding:8px 4px;line-height:1.35;white-space:normal;}
-  .btn-match small{display:block;font-weight:normal;font-size:10px;opacity:.85;}
-  .btn-match:hover:not(:disabled){background:var(--match-h);}
-  .btn-resize{background:var(--teal);font-weight:bold;padding:8px 4px;} .btn-resize:hover:not(:disabled){background:var(--teal-h);}
-  select,input[type=number],input[type=text]{background:#222;color:#fff;border:1px solid #555;border-radius:3px;
-    font-size:12px;padding:2px 4px;min-height:25px;}
+  .folder-label{color:var(--text-2);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+  /* buttons : すべて同じ基調（#3c3c3c / 枠線 / ホバーでアクセント） */
+  button,select,input{font:inherit;}
+  button{background:#3c3c3c;color:var(--text);border:1px solid var(--border-2);border-radius:4px;
+    font-size:12px;padding:3px 12px;min-height:28px;cursor:pointer;white-space:nowrap;}
+  button:hover:not(:disabled){background:var(--accent);border-color:var(--accent);}
+  button:active:not(:disabled){background:var(--accent-press);}
+  button:disabled{background:#2a2a2a;color:#555;border-color:#3a3a3a;cursor:default;}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .btn-save{border-color:var(--accent);}                       /* 主要操作は枠をアクセント色に */
+  .btn-sync{padding:6px 4px;}
+  .btn-reset{font-size:11px;min-height:24px;padding:2px 4px;color:var(--text-3);}
+  .btn-tool.plain{color:var(--text-2);}
+  select,input[type=number],input[type=text]{background:var(--surface);color:var(--text);border:1px solid var(--border);
+    border-radius:3px;font-size:12px;padding:1px 6px;min-height:26px;}
+
+  /* 中央：色調を合わせる（グループ）／サイズ変更 */
+  .cgroup{border:1px solid var(--accent);border-radius:6px;background:var(--surface);
+    padding:0 6px 8px;margin-top:4px;display:flex;flex-direction:column;gap:6px;}
+  .cgroup-title{margin:0 -6px 2px;padding:7px 4px;background:var(--accent);color:#fff;border-radius:5px 5px 0 0;
+    font-size:15px;font-weight:700;text-align:center;letter-spacing:.02em;line-height:1.25;}
+  .cgroup button{min-height:34px;font-size:13px;font-weight:600;padding:3px 2px;}
+  .cgroup select{width:100%;min-height:24px;font-size:10.5px;padding:0;color:var(--text-3);text-overflow:clip;}
+  .center .gap{height:22px;flex:none;}
+  .btn-resize{min-height:36px;font-size:13px;font-weight:600;}
 
   /* viewer */
   .viewer{flex:1;min-height:180px;background:#000;border:1px solid var(--border);
@@ -56,16 +63,17 @@
     transform-origin:center center;will-change:transform;
     user-select:none;-webkit-user-select:none;pointer-events:none;}
   .viewer.zoomed{cursor:grab;} .viewer.zoomed.grabbing{cursor:grabbing;}
-  .viewer .placeholder{color:var(--text-dim);font-size:13px;text-align:center;padding:20px;}
-  .viewer.drag{outline:2px dashed var(--blue);outline-offset:-6px;}
+  .viewer .placeholder{color:#666;font-size:14px;text-align:center;padding:20px;}
+  .viewer.drag{outline:2px dashed var(--accent);outline-offset:-6px;}
 
   /* crop overlay */
   .crop-layer{position:absolute;inset:0;pointer-events:none;}
   .crop-box{position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.55);
     cursor:move;pointer-events:auto;touch-action:none;}
-  .crop-box::before,.crop-box::after{content:"";position:absolute;pointer-events:none;background:rgba(255,255,255,.35);}
-  .crop-box::before{left:33.33%;right:33.33%;top:0;bottom:0;background:none;border-left:1px solid rgba(255,255,255,.35);border-right:1px solid rgba(255,255,255,.35);}
-  .crop-box::after{top:33.33%;bottom:33.33%;left:0;right:0;background:none;border-top:1px solid rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.35);}
+  .crop-box::before{content:"";position:absolute;pointer-events:none;left:33.33%;right:33.33%;top:0;bottom:0;
+    border-left:1px solid rgba(255,255,255,.35);border-right:1px solid rgba(255,255,255,.35);}
+  .crop-box::after{content:"";position:absolute;pointer-events:none;top:33.33%;bottom:33.33%;left:0;right:0;
+    border-top:1px solid rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.35);}
   .crop-box .h{position:absolute;width:14px;height:14px;background:#fff;border:1px solid #000;border-radius:2px;touch-action:none;}
   .crop-box .h[data-h=nw]{left:-8px;top:-8px;cursor:nwse-resize;}
   .crop-box .h[data-h=ne]{right:-8px;top:-8px;cursor:nesw-resize;}
@@ -77,62 +85,63 @@
   .crop-box .h[data-h=e]{top:calc(50% - 7px);right:-8px;cursor:ew-resize;}
   .crop-box.locked .h[data-h=n],.crop-box.locked .h[data-h=s],
   .crop-box.locked .h[data-h=w],.crop-box.locked .h[data-h=e]{display:none;}
-  .crop-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:#2a2140;border:1px solid #5b3a80;
-    border-radius:3px;padding:4px 6px;font-size:12px;color:#fff;}
+  .crop-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--accent);
+    border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);}
   .crop-bar input[type=number]{width:52px;}
 
   /* info */
-  .info{background:var(--info-bg);border-radius:3px;padding:4px 6px;min-height:44px;}
-  .info .fname{color:#fff;font-size:12px;font-weight:bold;word-break:break-all;text-align:center;}
-  .info .exif{color:var(--text);font-size:11px;margin-top:2px;line-height:1.5;text-align:center;}
-  .info .dim{color:#8fc1e3;font-size:11px;margin-top:2px;text-align:center;}
-  .counter{color:var(--text);font-size:12px;text-align:center;}
+  .info{background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;min-height:44px;}
+  .info .fname{color:#fff;font-size:12.5px;font-weight:700;word-break:break-all;text-align:center;}
+  .info .exif{color:var(--text-2);font-size:11.5px;margin-top:2px;line-height:1.5;text-align:center;}
+  .info .dim{color:var(--accent);font-size:11.5px;margin-top:2px;text-align:center;font-variant-numeric:tabular-nums;}
+  .counter{color:var(--text-2);font-size:12px;text-align:center;}
 
   /* nav row */
   .nav-row{display:flex;gap:6px;}
-  .nav-row .btn-nav{flex:1;}
-  .nav-row .btn-save{flex:1;}
+  .nav-row button{flex:1;}
 
   /* adjust sliders */
-  .adj{background:#161616;border:1px solid var(--border);border-radius:3px;padding:4px 6px;display:flex;flex-direction:column;gap:2px;}
-  .adj-row{display:flex;align-items:center;gap:6px;font-size:12px;}
-  .adj-row span{width:52px;color:#fff;}
-  .adj-row input[type=range]{flex:1;min-width:0;accent-color:#5dade2;}
-  .adj-row b{width:34px;text-align:right;color:#5dade2;font-size:12px;}
-  .adj-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:3px;}
+  .adj{background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:6px 10px;display:flex;flex-direction:column;gap:2px;}
+  .adj-row{display:flex;align-items:center;gap:8px;font-size:12px;}
+  .adj-row span{width:52px;color:var(--text);}
+  .adj-row input[type=range]{flex:1;min-width:0;accent-color:var(--accent);}
+  .adj-row b{width:34px;text-align:right;color:var(--text-2);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;}
+  .adj-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;}
   .adj-btns button{flex:1;}
 
   /* thumbnails */
   .thumbs{height:74px;min-height:74px;background:#000;border:1px solid var(--border);
     display:flex;gap:4px;overflow-x:auto;overflow-y:hidden;padding:4px;}
   .thumbs::-webkit-scrollbar{height:8px;} .thumbs::-webkit-scrollbar-thumb{background:#444;border-radius:4px;}
-  .thumb{height:100%;flex:0 0 auto;background:var(--panel);border:1px solid var(--border);cursor:pointer;}
-  .thumb.current{border:2px solid #fff;}
+  .thumb{height:100%;flex:0 0 auto;background:var(--surface);border:1px solid var(--border);cursor:pointer;}
+  .thumb.current{border:2px solid var(--accent);}
   .thumb img{height:100%;width:auto;display:block;}
-  .zoom-badge{font-size:11px;color:var(--text-dim);text-align:center;}
+  .zoom-badge{font-size:11px;color:var(--text-3);text-align:center;font-variant-numeric:tabular-nums;}
 
   /* resize dialog */
-  dialog{background:#1e1e1e;color:var(--text);border:1px solid #555;border-radius:6px;padding:14px 16px;min-width:360px;max-width:92vw;}
-  dialog::backdrop{background:rgba(0,0,0,.6);}
-  dialog h2{margin:0 0 10px;font-size:15px;color:#fff;}
-  dialog fieldset{border:1px solid var(--border);border-radius:4px;margin:0 0 10px;padding:6px 10px;}
-  dialog legend{font-size:12px;color:var(--text-dim);padding:0 4px;}
-  dialog label{font-size:12px;display:flex;align-items:center;gap:6px;margin:3px 0;}
-  dialog .row{display:flex;align-items:center;gap:6px;font-size:12px;margin:4px 0;flex-wrap:wrap;}
+  dialog{background:#2b2b2b;color:var(--text);border:1px solid var(--border-2);border-radius:6px;padding:16px 18px;
+    min-width:360px;max-width:92vw;box-shadow:0 12px 36px rgba(0,0,0,.55);}
+  dialog::backdrop{background:rgba(0,0,0,.5);}
+  dialog h2{margin:0 0 10px;font-size:15px;}
+  dialog fieldset{border:1px solid var(--border);border-radius:4px;margin:0 0 10px;padding:6px 10px 8px;}
+  dialog legend{font-size:12.5px;font-weight:700;color:var(--text-2);padding:0 4px;}
+  dialog label{font-size:12px;display:flex;align-items:center;gap:6px;margin:4px 0;cursor:pointer;}
+  dialog label input{accent-color:var(--accent);}
+  dialog .row{display:flex;align-items:center;gap:6px;font-size:12px;margin:6px 0;flex-wrap:wrap;}
   dialog .row input{width:84px;}
-  dialog .preview{background:#111;border-radius:3px;padding:6px;font-size:12px;min-height:34px;white-space:pre-line;color:#8fc1e3;}
-  dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;}
-  dialog .note{font-size:11px;color:var(--text-dim);margin:2px 0;}
+  dialog .preview{background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;min-height:34px;white-space:pre-line;color:var(--text-2);}
+  dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;}
 
-  #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#222;color:#fff;border:1px solid #555;
-    border-radius:4px;padding:8px 16px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;max-width:80vw;}
+  #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#2d2d2d;color:#fff;border:1px solid var(--border-2);
+    border-radius:4px;padding:8px 16px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;max-width:80vw;
+    box-shadow:0 6px 18px rgba(0,0,0,.4);}
   #toast.show{opacity:1;}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <h1>2Winds Pro<small>Ver1.0</small></h1>
+    <h1><b>2Winds Pro</b><small>Ver1.0</small></h1>
     <span class="hint">左右のフォルダ（または画像をドラッグ＆ドロップ）を選んで見比べ・補正します。ホイール＝左右同時ズーム、ドラッグで移動、ダブルクリックでリセット。色合わせは左→右・右→左の両方向に対応</span>
   </header>
   <div id="main">
@@ -198,20 +207,23 @@
 
     <!-- CENTER -->
     <div class="center">
-      <button class="btn-sync js-sync-prev">◀ 両方前へ</button>
-      <button class="btn-sync js-sync-next">両方次へ ▶</button>
+      <div class="ttl">同時移動</div>
+      <button class="btn-sync js-sync-prev" title="左右そろえて前へ">◀ 前へ</button>
+      <button class="btn-sync js-sync-next" title="左右そろえて次へ">次へ ▶</button>
       <div class="zoom-badge js-zoom">100%</div>
-      <button class="btn-reset js-reset">ズームリセット</button>
-      <hr>
-      <div class="ttl">色調を合わせる</div>
-      <button class="btn-match js-match-lr" title="左の写真を基準にして、右の写真の色調・明るさを補正します">左 ▶ 右<small>右を左に合わせる</small></button>
-      <button class="btn-match js-match-rl" title="右の写真を基準にして、左の写真の色調・明るさを補正します">左 ◀ 右<small>左を右に合わせる</small></button>
-      <select class="js-method" title="補正方法">
-        <option value="hist">ヒストグラム</option>
-        <option value="lab">Lab色転送</option>
-      </select>
-      <hr>
-      <button class="btn-resize js-resize">📐 画像サイズ変更</button>
+      <button class="btn-reset js-reset" title="ズームを100%に戻す">ズーム戻す</button>
+      <div class="gap"></div>
+      <div class="cgroup" role="group" aria-label="色調を合わせる">
+        <div class="cgroup-title">色調を<br>合わせる</div>
+        <button class="js-match-lr" title="左の写真を基準にして、右の写真の色調・明るさを補正します">左 ▶ 右</button>
+        <button class="js-match-rl" title="右の写真を基準にして、左の写真の色調・明るさを補正します">左 ◀ 右</button>
+        <select class="js-method" title="補正方法">
+          <option value="hist">ヒストグラム</option>
+          <option value="lab">Lab色転送</option>
+        </select>
+      </div>
+      <div class="gap"></div>
+      <button class="btn-resize js-resize" title="画像サイズ変更">サイズ変更</button>
     </div>
 
     <!-- RIGHT PANE -->
