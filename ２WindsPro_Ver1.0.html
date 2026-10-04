@@ -1,0 +1,1061 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2Winds Pro Ver1.0</title>
+<style>
+  :root{
+    --bg:#000; --panel:#1a1a1a; --border:#333; --text:#ccc; --text-dim:#888;
+    --blue:#4682b4; --blue-h:#5f9ea0; --green:#2e8b57; --green-h:#3cb371;
+    --gray:#333; --gray-h:#444; --sync:#2c5a8f; --sync-h:#3a6ba5;
+    --purple:#8e44ad; --purple-h:#9b59b6; --teal:#16a085; --teal-h:#1abc9c;
+    --match:#2980b9; --match-h:#3498db;
+    --info-bg:#333;
+  }
+  *{box-sizing:border-box;}
+  [hidden]{display:none !important;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Meiryo","Yu Gothic UI",sans-serif;overflow:hidden;}
+  #app{display:flex;flex-direction:column;height:100vh;}
+  header{display:flex;align-items:center;gap:12px;padding:6px 12px;background:#111;border-bottom:1px solid var(--border);}
+  header h1{font-size:15px;margin:0;font-weight:bold;color:#fff;white-space:nowrap;}
+  header h1 small{font-size:11px;color:var(--text-dim);font-weight:normal;margin-left:4px;}
+  header .hint{font-size:11px;color:var(--text-dim);}
+  #main{flex:1;display:flex;min-height:0;}
+  .pane{flex:1;display:flex;flex-direction:column;min-width:0;padding:6px;gap:6px;overflow-y:auto;overflow-x:hidden;}
+  .center{width:152px;display:flex;flex-direction:column;justify-content:center;gap:8px;padding:6px 4px;overflow-y:auto;}
+  .center hr{width:100%;border:0;border-top:1px solid var(--border);margin:2px 0;}
+  .center .ttl{font-size:11px;color:var(--text-dim);text-align:center;}
+
+  /* folder row */
+  .folder-row{display:flex;align-items:center;gap:8px;min-width:0;}
+  .folder-label{color:var(--text);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  button,select,input{font-family:inherit;}
+  button{border:none;color:#fff;font-size:12px;border-radius:3px;padding:2px 8px;
+    min-height:25px;cursor:pointer;white-space:nowrap;}
+  button:disabled{opacity:.4;cursor:default;}
+  .btn-folder{background:var(--gray);} .btn-folder:hover:not(:disabled){background:var(--gray-h);}
+  .btn-nav{background:var(--blue);} .btn-nav:hover:not(:disabled){background:var(--blue-h);}
+  .btn-save{background:var(--green);} .btn-save:hover:not(:disabled){background:var(--green-h);}
+  .btn-sync{background:var(--sync);font-weight:bold;padding:8px 4px;} .btn-sync:hover:not(:disabled){background:var(--sync-h);}
+  .btn-reset{background:var(--gray);font-size:11px;padding:6px 4px;} .btn-reset:hover{background:var(--gray-h);}
+  .btn-tool{background:var(--purple);} .btn-tool:hover:not(:disabled){background:var(--purple-h);}
+  .btn-tool.plain{background:var(--gray);} .btn-tool.plain:hover:not(:disabled){background:var(--gray-h);}
+  .btn-match{background:var(--match);font-weight:bold;padding:8px 4px;line-height:1.35;white-space:normal;}
+  .btn-match small{display:block;font-weight:normal;font-size:10px;opacity:.85;}
+  .btn-match:hover:not(:disabled){background:var(--match-h);}
+  .btn-resize{background:var(--teal);font-weight:bold;padding:8px 4px;} .btn-resize:hover:not(:disabled){background:var(--teal-h);}
+  select,input[type=number],input[type=text]{background:#222;color:#fff;border:1px solid #555;border-radius:3px;
+    font-size:12px;padding:2px 4px;min-height:25px;}
+
+  /* viewer */
+  .viewer{flex:1;min-height:180px;background:#000;border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;}
+  .viewer canvas.main{max-width:100%;max-height:100%;display:block;
+    transform-origin:center center;will-change:transform;
+    user-select:none;-webkit-user-select:none;pointer-events:none;}
+  .viewer.zoomed{cursor:grab;} .viewer.zoomed.grabbing{cursor:grabbing;}
+  .viewer .placeholder{color:var(--text-dim);font-size:13px;text-align:center;padding:20px;}
+  .viewer.drag{outline:2px dashed var(--blue);outline-offset:-6px;}
+
+  /* crop overlay */
+  .crop-layer{position:absolute;inset:0;pointer-events:none;}
+  .crop-box{position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.55);
+    cursor:move;pointer-events:auto;touch-action:none;}
+  .crop-box::before,.crop-box::after{content:"";position:absolute;pointer-events:none;background:rgba(255,255,255,.35);}
+  .crop-box::before{left:33.33%;right:33.33%;top:0;bottom:0;background:none;border-left:1px solid rgba(255,255,255,.35);border-right:1px solid rgba(255,255,255,.35);}
+  .crop-box::after{top:33.33%;bottom:33.33%;left:0;right:0;background:none;border-top:1px solid rgba(255,255,255,.35);border-bottom:1px solid rgba(255,255,255,.35);}
+  .crop-box .h{position:absolute;width:14px;height:14px;background:#fff;border:1px solid #000;border-radius:2px;touch-action:none;}
+  .crop-box .h[data-h=nw]{left:-8px;top:-8px;cursor:nwse-resize;}
+  .crop-box .h[data-h=ne]{right:-8px;top:-8px;cursor:nesw-resize;}
+  .crop-box .h[data-h=sw]{left:-8px;bottom:-8px;cursor:nesw-resize;}
+  .crop-box .h[data-h=se]{right:-8px;bottom:-8px;cursor:nwse-resize;}
+  .crop-box .h[data-h=n]{left:calc(50% - 7px);top:-8px;cursor:ns-resize;}
+  .crop-box .h[data-h=s]{left:calc(50% - 7px);bottom:-8px;cursor:ns-resize;}
+  .crop-box .h[data-h=w]{top:calc(50% - 7px);left:-8px;cursor:ew-resize;}
+  .crop-box .h[data-h=e]{top:calc(50% - 7px);right:-8px;cursor:ew-resize;}
+  .crop-box.locked .h[data-h=n],.crop-box.locked .h[data-h=s],
+  .crop-box.locked .h[data-h=w],.crop-box.locked .h[data-h=e]{display:none;}
+  .crop-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:#2a2140;border:1px solid #5b3a80;
+    border-radius:3px;padding:4px 6px;font-size:12px;color:#fff;}
+  .crop-bar input[type=number]{width:52px;}
+
+  /* info */
+  .info{background:var(--info-bg);border-radius:3px;padding:4px 6px;min-height:44px;}
+  .info .fname{color:#fff;font-size:12px;font-weight:bold;word-break:break-all;text-align:center;}
+  .info .exif{color:var(--text);font-size:11px;margin-top:2px;line-height:1.5;text-align:center;}
+  .info .dim{color:#8fc1e3;font-size:11px;margin-top:2px;text-align:center;}
+  .counter{color:var(--text);font-size:12px;text-align:center;}
+
+  /* nav row */
+  .nav-row{display:flex;gap:6px;}
+  .nav-row .btn-nav{flex:1;}
+  .nav-row .btn-save{flex:1;}
+
+  /* adjust sliders */
+  .adj{background:#161616;border:1px solid var(--border);border-radius:3px;padding:4px 6px;display:flex;flex-direction:column;gap:2px;}
+  .adj-row{display:flex;align-items:center;gap:6px;font-size:12px;}
+  .adj-row span{width:52px;color:#fff;}
+  .adj-row input[type=range]{flex:1;min-width:0;accent-color:#5dade2;}
+  .adj-row b{width:34px;text-align:right;color:#5dade2;font-size:12px;}
+  .adj-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:3px;}
+  .adj-btns button{flex:1;}
+
+  /* thumbnails */
+  .thumbs{height:74px;min-height:74px;background:#000;border:1px solid var(--border);
+    display:flex;gap:4px;overflow-x:auto;overflow-y:hidden;padding:4px;}
+  .thumbs::-webkit-scrollbar{height:8px;} .thumbs::-webkit-scrollbar-thumb{background:#444;border-radius:4px;}
+  .thumb{height:100%;flex:0 0 auto;background:var(--panel);border:1px solid var(--border);cursor:pointer;}
+  .thumb.current{border:2px solid #fff;}
+  .thumb img{height:100%;width:auto;display:block;}
+  .zoom-badge{font-size:11px;color:var(--text-dim);text-align:center;}
+
+  /* resize dialog */
+  dialog{background:#1e1e1e;color:var(--text);border:1px solid #555;border-radius:6px;padding:14px 16px;min-width:360px;max-width:92vw;}
+  dialog::backdrop{background:rgba(0,0,0,.6);}
+  dialog h2{margin:0 0 10px;font-size:15px;color:#fff;}
+  dialog fieldset{border:1px solid var(--border);border-radius:4px;margin:0 0 10px;padding:6px 10px;}
+  dialog legend{font-size:12px;color:var(--text-dim);padding:0 4px;}
+  dialog label{font-size:12px;display:flex;align-items:center;gap:6px;margin:3px 0;}
+  dialog .row{display:flex;align-items:center;gap:6px;font-size:12px;margin:4px 0;flex-wrap:wrap;}
+  dialog .row input{width:84px;}
+  dialog .preview{background:#111;border-radius:3px;padding:6px;font-size:12px;min-height:34px;white-space:pre-line;color:#8fc1e3;}
+  dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;}
+  dialog .note{font-size:11px;color:var(--text-dim);margin:2px 0;}
+
+  #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#222;color:#fff;border:1px solid #555;
+    border-radius:4px;padding:8px 16px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;max-width:80vw;}
+  #toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>2Winds Pro<small>Ver1.0</small></h1>
+    <span class="hint">左右のフォルダ（または画像をドラッグ＆ドロップ）を選んで見比べ・補正します。ホイール＝左右同時ズーム、ドラッグで移動、ダブルクリックでリセット。色合わせは左→右・右→左の両方向に対応</span>
+  </header>
+  <div id="main">
+    <!-- LEFT PANE -->
+    <div class="pane" data-side="left">
+      <div class="folder-row">
+        <button class="btn-folder js-folder">左のフォルダを選択</button>
+        <span class="folder-label js-folder-name"></span>
+      </div>
+      <div class="crop-bar js-crop-bar" hidden>
+        <span>✂ 比率:</span>
+        <select class="js-ratio">
+          <option value="free">自由</option>
+          <option value="3:2">3:2（横）</option>
+          <option value="2:3">2:3（縦）</option>
+          <option value="4:3">4:3（横）</option>
+          <option value="3:4">3:4（縦）</option>
+          <option value="16:9">16:9（横）</option>
+          <option value="9:16">9:16（縦）</option>
+          <option value="1:1">1:1（正方形）</option>
+          <option value="custom">カスタム</option>
+        </select>
+        <span class="js-custom" hidden><input type="number" class="js-cw" min="1" max="99" value="3">:<input type="number" class="js-ch" min="1" max="99" value="2"></span>
+        <button class="btn-save js-crop-ok">✓ 切り抜き確定</button>
+        <button class="btn-folder js-crop-cancel">キャンセル</button>
+      </div>
+      <div class="viewer js-viewer">
+        <div class="placeholder">フォルダが選択されていません</div>
+        <canvas class="main" hidden></canvas>
+        <div class="crop-layer js-crop-layer" hidden>
+          <div class="crop-box js-crop-box">
+            <div class="h" data-h="nw"></div><div class="h" data-h="ne"></div>
+            <div class="h" data-h="sw"></div><div class="h" data-h="se"></div>
+            <div class="h" data-h="n"></div><div class="h" data-h="s"></div>
+            <div class="h" data-h="w"></div><div class="h" data-h="e"></div>
+          </div>
+        </div>
+      </div>
+      <div class="counter js-counter"></div>
+      <div class="info">
+        <div class="fname js-fname"></div>
+        <div class="exif js-exif"></div>
+        <div class="dim js-dim"></div>
+      </div>
+      <div class="nav-row">
+        <button class="btn-nav js-prev">◀ 前へ</button>
+        <button class="btn-nav js-next">次へ ▶</button>
+        <button class="btn-save js-save">名前を付けて保存</button>
+      </div>
+      <div class="adj">
+        <div class="adj-row"><span>色温度</span><input type="range" min="-100" max="100" value="0" data-k="temp" title="ダブルクリックで0に戻す"><b class="v">0</b></div>
+        <div class="adj-row"><span>色かぶり</span><input type="range" min="-100" max="100" value="0" data-k="tint" title="ダブルクリックで0に戻す"><b class="v">0</b></div>
+        <div class="adj-row"><span>明るさ</span><input type="range" min="-100" max="100" value="0" data-k="bright" title="ダブルクリックで0に戻す"><b class="v">0</b></div>
+        <div class="adj-btns">
+          <button class="btn-tool js-crop">✂ 切り抜き</button>
+          <button class="btn-tool plain js-adj-reset">調整リセット</button>
+          <button class="btn-tool plain js-undo">↶ 元に戻す</button>
+          <button class="btn-tool plain js-orig">元画像に戻す</button>
+        </div>
+      </div>
+      <div class="thumbs js-thumbs"></div>
+    </div>
+
+    <!-- CENTER -->
+    <div class="center">
+      <button class="btn-sync js-sync-prev">◀ 両方前へ</button>
+      <button class="btn-sync js-sync-next">両方次へ ▶</button>
+      <div class="zoom-badge js-zoom">100%</div>
+      <button class="btn-reset js-reset">ズームリセット</button>
+      <hr>
+      <div class="ttl">色調を合わせる</div>
+      <button class="btn-match js-match-lr" title="左の写真を基準にして、右の写真の色調・明るさを補正します">左 ▶ 右<small>右を左に合わせる</small></button>
+      <button class="btn-match js-match-rl" title="右の写真を基準にして、左の写真の色調・明るさを補正します">左 ◀ 右<small>左を右に合わせる</small></button>
+      <select class="js-method" title="補正方法">
+        <option value="hist">ヒストグラム</option>
+        <option value="lab">Lab色転送</option>
+      </select>
+      <hr>
+      <button class="btn-resize js-resize">📐 画像サイズ変更</button>
+    </div>
+
+    <!-- RIGHT PANE -->
+    <div class="pane" data-side="right">
+      <div class="folder-row">
+        <button class="btn-folder js-folder">右のフォルダを選択</button>
+        <span class="folder-label js-folder-name"></span>
+      </div>
+      <div class="crop-bar js-crop-bar" hidden>
+        <span>✂ 比率:</span>
+        <select class="js-ratio">
+          <option value="free">自由</option>
+          <option value="3:2">3:2（横）</option>
+          <option value="2:3">2:3（縦）</option>
+          <option value="4:3">4:3（横）</option>
+          <option value="3:4">3:4（縦）</option>
+          <option value="16:9">16:9（横）</option>
+          <option value="9:16">9:16（縦）</option>
+          <option value="1:1">1:1（正方形）</option>
+          <option value="custom">カスタム</option>
+        </select>
+        <span class="js-custom" hidden><input type="number" class="js-cw" min="1" max="99" value="3">:<input type="number" class="js-ch" min="1" max="99" value="2"></span>
+        <button class="btn-save js-crop-ok">✓ 切り抜き確定</button>
+        <button class="btn-folder js-crop-cancel">キャンセル</button>
+      </div>
+      <div class="viewer js-viewer">
+        <div class="placeholder">フォルダが選択されていません</div>
+        <canvas class="main" hidden></canvas>
+        <div class="crop-layer js-crop-layer" hidden>
+          <div class="crop-box js-crop-box">
+            <div class="h" data-h="nw"></div><div class="h" data-h="ne"></div>
+            <div class="h" data-h="sw"></div><div class="h" data-h="se"></div>
+            <div class="h" data-h="n"></div><div class="h" data-h="s"></div>
+            <div class="h" data-h="w"></div><div class="h" data-h="e"></div>
+          </div>
+        </div>
+      </div>
+      <div class="counter js-counter"></div>
+      <div class="info">
+        <div class="fname js-fname"></div>
+        <div class="exif js-exif"></div>
+        <div class="dim js-dim"></div>
+      </div>
+      <div class="nav-row">
+        <button class="btn-nav js-prev">◀ 前へ</button>
+        <button class="btn-nav js-next">次へ ▶</button>
+        <button class="btn-save js-save">名前を付けて保存</button>
+      </div>
+      <div class="adj">
+        <div class="adj-row"><span>色温度</span><input type="range" min="-100" max="100" value="0" data-k="temp" title="ダブルクリックで0に戻す"><b class="v">0</b></div>
+        <div class="adj-row"><span>色かぶり</span><input type="range" min="-100" max="100" value="0" data-k="tint" title="ダブルクリックで0に戻す"><b class="v">0</b></div>
+        <div class="adj-row"><span>明るさ</span><input type="range" min="-100" max="100" value="0" data-k="bright" title="ダブルクリックで0に戻す"><b class="v">0</b></div>
+        <div class="adj-btns">
+          <button class="btn-tool js-crop">✂ 切り抜き</button>
+          <button class="btn-tool plain js-adj-reset">調整リセット</button>
+          <button class="btn-tool plain js-undo">↶ 元に戻す</button>
+          <button class="btn-tool plain js-orig">元画像に戻す</button>
+        </div>
+      </div>
+      <div class="thumbs js-thumbs"></div>
+    </div>
+  </div>
+</div>
+
+<!-- resize dialog -->
+<dialog id="resizeDlg">
+  <h2>📐 画像サイズ変更</h2>
+  <fieldset>
+    <legend>変更する写真</legend>
+    <label><input type="checkbox" id="rzA" checked><span id="rzALabel">左の写真</span></label>
+    <label><input type="checkbox" id="rzB" checked><span id="rzBLabel">右の写真</span></label>
+  </fieldset>
+  <fieldset>
+    <legend>サイズ指定（いずれか1つ。cm は 300dpi 換算）</legend>
+    <div class="row">パーセント: <input type="number" id="rzPct" min="1" max="1000" step="1" value="100"> %</div>
+    <div class="row">ピクセル: 幅 <input type="number" id="rzWpx" min="1" step="1"> 高さ <input type="number" id="rzHpx" min="1" step="1"> px</div>
+    <div class="row">cm: 幅 <input type="number" id="rzWcm" min="0.1" step="0.01"> 高さ <input type="number" id="rzHcm" min="0.1" step="0.01"> cm</div>
+    <label><input type="checkbox" id="rzKeep" checked>縦横比を維持する</label>
+  </fieldset>
+  <div class="preview" id="rzPreview"></div>
+  <div class="btns">
+    <button class="btn-folder" id="rzCancel">キャンセル</button>
+    <button class="btn-save" id="rzOk">適用</button>
+  </div>
+</dialog>
+
+<div id="toast"></div>
+<input type="file" id="picker" webkitdirectory directory multiple accept="image/*" style="display:none">
+
+<script>
+"use strict";
+const IMG_RE = /\.(png|jpe?g|bmp|gif|webp)$/i;
+const PREVIEW_MAX = 3200;     // 画面表示用に縮小する最大辺(px)。保存時は常にフル解像度で処理する
+const HIST_LIMIT = 5;         // 「元に戻す」で遡れる回数
+const CALC_DPI = 300;         // cm換算に使うDPI
+
+// ---------- 共通ユーティリティ ----------
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function clamp8(v){return v<0?0:(v>255?255:v);}
+const tick=()=>new Promise(r=>setTimeout(r,30));
+const zeroAdj=()=>({temp:0,tint:0,bright:0});
+const isZeroAdj=a=>!a.temp&&!a.tint&&!a.bright;
+let toastTimer=null;
+function toast(msg,ms=2600){
+  const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),ms);
+}
+function newCanvas(w,h){const c=document.createElement("canvas");c.width=w;c.height=h;return c;}
+
+// ---------- 左右共通のズーム／パン状態（両ペインに適用） ----------
+const view = {scale:1, tx:0, ty:0};
+const zoomBadge = document.querySelector(".js-zoom");
+function applyView(){
+  const t = `translate(${view.tx}px,${view.ty}px) scale(${view.scale})`;
+  panes.forEach(p=>{ const im=p.currentImg(); if(im) im.style.transform=t;
+    p.el.querySelector(".js-viewer").classList.toggle("zoomed", view.scale!==1); });
+  zoomBadge.textContent = Math.round(view.scale*100)+"%";
+}
+function resetView(){ view.scale=1; view.tx=0; view.ty=0; applyView(); }
+
+// ---------- 画像の補正（色温度・色かぶり・明るさ） ----------
+// Photo-Arranger の ImageProcessor と同じ計算式。
+//  色温度: B -= v*0.5 / R += v*0.5   色かぶり: G -= v*0.5   明るさ: HSVの明度V に +v
+function adjustPixels(src,dst,a){
+  const tt=a.temp*0.5, tg=a.tint*0.5, b=a.bright, n=src.length;
+  for(let i=0;i<n;i+=4){
+    let r=src[i], g=src[i+1], bl=src[i+2];
+    if(tt){ bl=clamp8(bl-tt); r=clamp8(r+tt); }
+    if(tg){ g=clamp8(g-tg); }
+    if(b){
+      const v=Math.max(r,g,bl);
+      if(v>0){ const k=clamp8(v+b)/v; r*=k; g*=k; bl*=k; }   // 色相・彩度を保ったまま明度だけ変える
+      else { r=g=bl=clamp8(b); }
+    }
+    dst[i]=r; dst[i+1]=g; dst[i+2]=bl; dst[i+3]=src[i+3];
+  }
+}
+
+// ---------- 色調マッチング ----------
+// ヒストグラムマッチング（各チャンネルの累積分布を参照画像に合わせる）
+function histMatch(srcC, refC){
+  const sd=srcC.getContext("2d").getImageData(0,0,srcC.width,srcC.height);
+  const rd=refC.getContext("2d").getImageData(0,0,refC.width,refC.height);
+  const sp=sd.data, rp=rd.data;
+  const out=newCanvas(srcC.width,srcC.height);
+  const luts=[];
+  for(let ch=0;ch<3;ch++){
+    const sh=new Float64Array(256), rh=new Float64Array(256);
+    for(let i=ch;i<sp.length;i+=4) sh[sp[i]]++;
+    for(let i=ch;i<rp.length;i+=4) rh[rp[i]]++;
+    for(let i=1;i<256;i++){ sh[i]+=sh[i-1]; rh[i]+=rh[i-1]; }
+    const sN=sh[255]||1, rN=rh[255]||1;
+    const lut=new Uint8Array(256);
+    for(let i=0;i<256;i++){
+      const s=sh[i]/sN;
+      let lo=0, hi=255;                       // rh/rN >= s となる最小の j を二分探索
+      while(lo<hi){ const m=(lo+hi)>>1; if(rh[m]/rN>=s) hi=m; else lo=m+1; }
+      let j=lo;
+      if(j>0 && Math.abs(rh[j-1]/rN-s) <= Math.abs(rh[j]/rN-s)) j=j-1;
+      lut[i]=j;
+    }
+    luts.push(lut);
+  }
+  for(let i=0;i<sp.length;i+=4){
+    sp[i]=luts[0][sp[i]]; sp[i+1]=luts[1][sp[i+1]]; sp[i+2]=luts[2][sp[i+2]];
+  }
+  out.getContext("2d").putImageData(sd,0,0);
+  return out;
+}
+
+// Lab色転送（Lab色空間で平均・標準偏差を参照画像に合わせる）
+const SRGB2LIN=(()=>{const t=new Float32Array(256);for(let i=0;i<256;i++){const c=i/255;t[i]=c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4);}return t;})();
+const LIN2SRGB=(()=>{const N=4096,t=new Uint8Array(N+1);for(let i=0;i<=N;i++){const c=i/N;t[i]=Math.round(255*(c<=0.0031308?12.92*c:1.055*Math.pow(c,1/2.4)-0.055));}return t;})();
+const XN=0.95047, ZN=1.08883;
+function labF(t){return t>0.008856?Math.cbrt(t):7.787*t+16/116;}
+function labFinv(t){const t3=t*t*t;return t3>0.008856?t3:(t-16/116)/7.787;}
+function rgbToLab(r,g,b,o,k){
+  const R=SRGB2LIN[r],G=SRGB2LIN[g],B=SRGB2LIN[b];
+  const X=(0.412453*R+0.357580*G+0.180423*B)/XN;
+  const Y=0.212671*R+0.715160*G+0.072169*B;
+  const Z=(0.019334*R+0.119193*G+0.950227*B)/ZN;
+  const fx=labF(X),fy=labF(Y),fz=labF(Z);
+  o[k]=116*fy-16; o[k+1]=500*(fx-fy); o[k+2]=200*(fy-fz);
+}
+function labToRgb(L,a,b,dst,k){
+  const fy=(L+16)/116, fx=fy+a/500, fz=fy-b/200;
+  const X=labFinv(fx)*XN, Y=labFinv(fy), Z=labFinv(fz)*ZN;
+  const R= 3.240479*X-1.537150*Y-0.498535*Z;
+  const G=-0.969256*X+1.875992*Y+0.041556*Z;
+  const B= 0.055648*X-0.204043*Y+1.057311*Z;
+  dst[k]  =LIN2SRGB[Math.round(clamp(R,0,1)*4096)];
+  dst[k+1]=LIN2SRGB[Math.round(clamp(G,0,1)*4096)];
+  dst[k+2]=LIN2SRGB[Math.round(clamp(B,0,1)*4096)];
+}
+function labStats(d,step){
+  const s=[0,0,0], s2=[0,0,0], o=new Float32Array(3); let n=0;
+  for(let i=0;i<d.length;i+=4*step){
+    rgbToLab(d[i],d[i+1],d[i+2],o,0);
+    for(let c=0;c<3;c++){ s[c]+=o[c]; s2[c]+=o[c]*o[c]; }
+    n++;
+  }
+  const mean=s.map(v=>v/n), std=s2.map((v,c)=>Math.sqrt(Math.max(0,v/n-mean[c]*mean[c])));
+  return {mean,std};
+}
+function labTransfer(srcC, refC){
+  const sd=srcC.getContext("2d").getImageData(0,0,srcC.width,srcC.height);
+  const rd=refC.getContext("2d").getImageData(0,0,refC.width,refC.height);
+  const sp=sd.data;
+  const ss=labStats(sp,1), rs=labStats(rd.data,2);
+  const o=new Float32Array(3);
+  const lim=[[0,100],[-128,127],[-128,127]];
+  for(let i=0;i<sp.length;i+=4){
+    rgbToLab(sp[i],sp[i+1],sp[i+2],o,0);
+    for(let c=0;c<3;c++){
+      o[c]= ss.std[c]>0 ? (o[c]-ss.mean[c])*(rs.std[c]/ss.std[c])+rs.mean[c] : rs.mean[c];
+      o[c]=clamp(o[c],lim[c][0],lim[c][1]);
+    }
+    labToRgb(o[0],o[1],o[2],sp,i);
+  }
+  const out=newCanvas(srcC.width,srcC.height);
+  out.getContext("2d").putImageData(sd,0,0);
+  return out;
+}
+
+// ---------- JPEGのDPI(JFIF密度)を書き換える ----------
+function setJpegDpi(u8,dpi){
+  const hi=(dpi>>8)&255, lo=dpi&255;
+  const hasJfif=u8[2]===0xFF&&u8[3]===0xE0&&u8[6]===0x4A&&u8[7]===0x46&&u8[8]===0x49&&u8[9]===0x46;
+  if(hasJfif){ u8[13]=1; u8[14]=hi; u8[15]=lo; u8[16]=hi; u8[17]=lo; return u8; }
+  const app0=new Uint8Array([0xFF,0xE0,0x00,0x10,0x4A,0x46,0x49,0x46,0x00,0x01,0x01,0x01,hi,lo,hi,lo,0x00,0x00]);
+  const out=new Uint8Array(u8.length+app0.length);
+  out.set(u8.subarray(0,2),0); out.set(app0,2); out.set(u8.subarray(2),2+app0.length);
+  return out;
+}
+
+// 縮小時は段階的に半分にしてから最終サイズへ（ジャギー防止）
+function resampleCanvas(src,nw,nh){
+  let cur=src;
+  while(cur.width/2>=nw && cur.height/2>=nh){
+    const c=newCanvas(Math.max(1,Math.floor(cur.width/2)),Math.max(1,Math.floor(cur.height/2)));
+    const x=c.getContext("2d"); x.imageSmoothingQuality="high"; x.drawImage(cur,0,0,c.width,c.height); cur=c;
+  }
+  const out=newCanvas(nw,nh);
+  const ctx=out.getContext("2d"); ctx.imageSmoothingQuality="high"; ctx.drawImage(cur,0,0,nw,nh);
+  return out;
+}
+
+// ---------- 最小限のJPEG EXIFパーサ ----------
+function parseExif(buf){
+  try{
+    const dv=new DataView(buf);
+    if(dv.getUint16(0)!==0xFFD8) return null;
+    let off=2;
+    while(off<dv.byteLength){
+      if(dv.getUint8(off)!==0xFF) break;
+      const marker=dv.getUint8(off+1), size=dv.getUint16(off+2);
+      if(marker===0xE1 && dv.getUint32(off+4)===0x45786966) return readTiff(dv,off+10);
+      if(marker===0xDA) break;
+      off+=2+size;
+    }
+  }catch(e){}
+  return null;
+}
+function readTiff(dv, base){
+  const little=dv.getUint16(base)===0x4949;
+  const g16=o=>dv.getUint16(o,little), g32=o=>dv.getUint32(o,little);
+  const tags={};
+  const TAG={0x010F:"Make",0x0110:"Model",0x8769:"ExifIFD",0x829A:"ExposureTime",
+    0x829D:"FNumber",0x8827:"ISO",0x8833:"ISO",0x9003:"DateTimeOriginal",0xA434:"LensModel"};
+  function readIFD(ptr){
+    const n=g16(ptr);
+    for(let i=0;i<n;i++){
+      const e=ptr+2+i*12, tag=g16(e), type=g16(e+2), cnt=g32(e+4);
+      const name=TAG[tag]; if(!name) continue;
+      const typeSize={1:1,2:1,3:2,4:4,5:8,7:1,9:4,10:8}[type]||1;
+      const bytes=typeSize*cnt;
+      const vOff=bytes<=4? e+8 : base+g32(e+8);
+      let val;
+      if(type===2){let s="";for(let k=0;k<cnt-1;k++){const c=dv.getUint8(vOff+k);if(c===0)break;s+=String.fromCharCode(c);}val=s.trim();}
+      else if(type===3){val=g16(vOff);}
+      else if(type===4){val=g32(vOff);}
+      else if(type===5){val=[g32(vOff),g32(vOff+4)];}
+      else {val=g32(vOff);}
+      if(name==="ExifIFD") readIFD(base+val); else tags[name]=val;
+    }
+  }
+  readIFD(base+g32(base+4));
+  return tags;
+}
+function fmtExif(t){
+  if(!t) return "";
+  const parts=[];
+  if(t.Make||t.Model) parts.push(((t.Make||"")+" "+(t.Model||"")).trim());
+  if(t.LensModel) parts.push(t.LensModel);
+  if(t.FNumber){let f=Array.isArray(t.FNumber)?(t.FNumber[1]?t.FNumber[0]/t.FNumber[1]:t.FNumber[0]):t.FNumber;parts.push("F"+(Number.isInteger(f)?f:(+f).toFixed(1)));}
+  if(t.ExposureTime && Array.isArray(t.ExposureTime)){const [n,d]=t.ExposureTime;if(d&&n){const s=n/d;parts.push(s>=1?(Number.isInteger(s)?s:s.toFixed(1))+"秒":"1/"+Math.round(d/n)+"秒");}}
+  if(t.ISO) parts.push("ISO"+t.ISO);
+  if(t.DateTimeOriginal) parts.push(t.DateTimeOriginal.replace(/^(\d{4}):(\d{2}):(\d{2})/,"$1/$2/$3"));
+  return parts.join(" | ");
+}
+
+// ---------- Pane（左右1枚分の表示・編集部品） ----------
+// 各画像オブジェクト o の主なフィールド:
+//   file/name/_url : 元ファイル   base : 確定済みの全解像度canvas（編集前はnull＝元画像）
+//   adj : スライダー値   hist : 「元に戻す」用の履歴   pdata : 表示用に縮小した画素データ
+function makePane(el, side){
+  const q=s=>el.querySelector(s);
+  const state={images:[],index:0,exifCache:new Map(),img:null};
+  const viewer=q(".js-viewer"), fname=q(".js-fname"), exif=q(".js-exif"), dimEl=q(".js-dim"),
+        counter=q(".js-counter"), thumbs=q(".js-thumbs"), folderName=q(".js-folder-name"),
+        cv=q("canvas.main"), ctx=cv.getContext("2d"), placeholder=q(".placeholder");
+  const sliders=[...el.querySelectorAll(".adj input[type=range]")];
+  let token=0, rafPending=false;
+  const cur=()=>state.images[state.index];
+  const edited=o=>!!o && (o.hist.length>0 || !isZeroAdj(o.adj));
+
+  function setFiles(files,label){
+    if(crop) endCrop();
+    const imgs=files.filter(f=>IMG_RE.test(f.name))
+      .sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+    if(!imgs.length) return;
+    state.images.forEach(o=>o._url&&URL.revokeObjectURL(o._url));
+    state.images=imgs.map(f=>({file:f,name:f.name,_url:URL.createObjectURL(f),
+      base:null,pdata:null,out:null,pw:0,ph:0,adj:zeroAdj(),hist:[],dpi:CALC_DPI}));
+    state.index=0;
+    if(label!==undefined) folderName.textContent=label;
+    folderName.title=folderName.textContent;
+    buildThumbs(); show(0);
+  }
+  function buildThumbs(){
+    thumbs.innerHTML="";
+    state.images.forEach((o,i)=>{
+      const d=document.createElement("div"); d.className="thumb";
+      const im=document.createElement("img"); im.src=o._url; im.loading="lazy";
+      d.appendChild(im); d.addEventListener("click",()=>show(i));
+      thumbs.appendChild(d); o._thumb=d; o._thumbImg=im;
+    });
+  }
+  function refreshThumb(o){
+    if(!o._thumbImg||!o.base) return;
+    const s=Math.min(1,200/Math.max(o.base.width,o.base.height));
+    const c=newCanvas(Math.max(1,Math.round(o.base.width*s)),Math.max(1,Math.round(o.base.height*s)));
+    c.getContext("2d").drawImage(o.base,0,0,c.width,c.height);
+    o._thumbImg.src=c.toDataURL("image/jpeg",0.8);
+  }
+
+  // 元画像を全解像度canvasとして読み込む（EXIFの向きも反映される）
+  async function ensureBase(o){
+    if(o.base) return;
+    const bmp=await createImageBitmap(o.file);
+    const c=newCanvas(bmp.width,bmp.height);
+    c.getContext("2d").drawImage(bmp,0,0);
+    if(bmp.close) bmp.close();
+    o.base=c;
+  }
+  // 表示用の縮小データを作る
+  function makePreview(o){
+    const s=Math.min(1,PREVIEW_MAX/Math.max(o.base.width,o.base.height));
+    const pw=Math.max(1,Math.round(o.base.width*s)), ph=Math.max(1,Math.round(o.base.height*s));
+    const c=newCanvas(pw,ph); c.getContext("2d").drawImage(o.base,0,0,pw,ph);
+    o.pdata=c.getContext("2d").getImageData(0,0,pw,ph); o.out=null; o.pw=pw; o.ph=ph;
+  }
+  function draw(o){
+    if(!o.pdata) return;
+    if(cv.width!==o.pw||cv.height!==o.ph){cv.width=o.pw;cv.height=o.ph;}
+    if(isZeroAdj(o.adj)){ ctx.putImageData(o.pdata,0,0); return; }
+    if(!o.out) o.out=new ImageData(o.pw,o.ph);
+    adjustPixels(o.pdata.data,o.out.data,o.adj);
+    ctx.putImageData(o.out,0,0);
+  }
+  function scheduleDraw(){
+    if(rafPending) return; rafPending=true;
+    requestAnimationFrame(()=>{rafPending=false;const o=cur();if(o)draw(o);});
+  }
+  function syncSliders(o){
+    sliders.forEach(s=>{
+      const v=o?o.adj[s.dataset.k]:0; s.value=v; s.parentElement.querySelector(".v").textContent=v;
+    });
+  }
+  function updateDim(o){
+    if(!o||!o.base){dimEl.textContent="";return;}
+    const w=o.base.width,h=o.base.height,d=o.dpi||CALC_DPI;
+    dimEl.textContent=`${w} × ${h} px | ${(w/d*2.54).toFixed(2)} × ${(h/d*2.54).toFixed(2)} cm (${d}dpi)`+(o.hist.length?" ・編集済み":"");
+  }
+
+  async function show(i){
+    if(!state.images.length) return;
+    if(crop) return;
+    const my=++token;
+    const prev=cur();
+    state.index=clamp(i,0,state.images.length-1);
+    const o=cur();
+    // 未編集の画像はメモリ節約のため解放する
+    if(prev&&prev!==o&&!edited(prev)){prev.base=null;prev.pdata=null;prev.out=null;}
+    fname.textContent=o.name;
+    counter.textContent=(state.index+1)+" / "+state.images.length;
+    state.images.forEach(x=>x._thumb&&x._thumb.classList.remove("current"));
+    if(o._thumb){o._thumb.classList.add("current");o._thumb.scrollIntoView({inline:"center",block:"nearest"});}
+    exif.textContent=""; dimEl.textContent="";
+    try{
+      await ensureBase(o);
+      if(my!==token) return;
+      if(!o.pdata) makePreview(o);
+      syncSliders(o); draw(o);
+      placeholder.hidden=true; cv.hidden=false; state.img=cv;
+      applyView(); updateDim(o);
+    }catch(e){
+      placeholder.hidden=false; placeholder.textContent="画像を表示できません: "+o.name; cv.hidden=true; state.img=null;
+      return;
+    }
+    if(/\.jpe?g$/i.test(o.name)){
+      if(state.exifCache.has(o.name)) exif.textContent=state.exifCache.get(o.name);
+      else{
+        const buf=await o.file.arrayBuffer();
+        const s=fmtExif(parseExif(buf));
+        state.exifCache.set(o.name,s);
+        if(cur()===o) exif.textContent=s;
+      }
+    }
+  }
+  function move(delta){ if(state.images.length&&!crop) show(state.index+delta); }
+
+  // 現在の画像（スライダー補正込み・全解像度）をcanvasで取得
+  async function getProcessed(o){
+    o=o||cur(); if(!o) return null;
+    await ensureBase(o);
+    if(isZeroAdj(o.adj)) return o.base;
+    const c=newCanvas(o.base.width,o.base.height), x=c.getContext("2d");
+    x.drawImage(o.base,0,0);
+    const d=x.getImageData(0,0,c.width,c.height);
+    adjustPixels(d.data,d.data,o.adj);
+    x.putImageData(d,0,0);
+    return c;
+  }
+  // 結果を新しい「元画像」として確定する（履歴を残す）
+  async function commit(o,canvas,keepDpi){
+    await ensureBase(o);
+    o.hist.push({base:o.base,adj:{...o.adj}});
+    if(o.hist.length>HIST_LIMIT) o.hist.shift();
+    o.base=canvas; o.adj=zeroAdj();
+    if(!keepDpi) o.dpi=CALC_DPI;
+    await refresh(o);
+  }
+  async function refresh(o){
+    if(cur()!==o) return;
+    makePreview(o); syncSliders(o); draw(o);
+    placeholder.hidden=true; cv.hidden=false; state.img=cv;
+    applyView(); updateDim(o); refreshThumb(o);
+  }
+  async function undo(){
+    const o=cur(); if(!o||crop) return;
+    if(!isZeroAdj(o.adj) && !o.hist.length){ o.adj=zeroAdj(); syncSliders(o); draw(o); return; }
+    const e=o.hist.pop(); if(!e){toast("これ以上戻せません");return;}
+    o.base=e.base; o.adj=e.adj; await refresh(o);
+  }
+  async function toOriginal(){
+    const o=cur(); if(!o||crop) return;
+    o.base=null;o.pdata=null;o.out=null;o.adj=zeroAdj();o.hist=[];o.dpi=CALC_DPI;
+    if(o._thumbImg) o._thumbImg.src=o._url;
+    await ensureBase(o); await refresh(o);
+  }
+
+  // --- スライダー ---
+  sliders.forEach(s=>{
+    s.addEventListener("input",()=>{
+      const o=cur(); if(!o||!o.pdata){s.value=0;return;}
+      o.adj[s.dataset.k]=+s.value;
+      s.parentElement.querySelector(".v").textContent=s.value;
+      scheduleDraw();
+    });
+    s.addEventListener("dblclick",()=>{s.value=0;s.dispatchEvent(new Event("input"));});
+  });
+  q(".js-adj-reset").addEventListener("click",()=>{
+    const o=cur(); if(!o) return; o.adj=zeroAdj(); syncSliders(o); draw(o);
+  });
+  q(".js-undo").addEventListener("click",undo);
+  q(".js-orig").addEventListener("click",toOriginal);
+
+  // --- 保存（補正済みはJPEGでDPI付きで書き出し／未編集は元ファイルをそのまま） ---
+  async function save(){
+    const o=cur(); if(!o) return;
+    if(crop) return;
+    if(!edited(o)){
+      const a=document.createElement("a"); a.href=o._url; a.download=o.name; a.click(); return;
+    }
+    const name=o.name.replace(/\.[^.]+$/,"")+"_edit.jpg";
+    let handle=null;
+    if(window.showSaveFilePicker){
+      try{
+        handle=await window.showSaveFilePicker({suggestedName:name,
+          types:[{description:"JPEG画像",accept:{"image/jpeg":[".jpg",".jpeg"]}}]});
+      }catch(e){ if(e&&e.name==="AbortError") return; handle=null; }
+    }
+    try{
+      const src=await getProcessed(o);
+      const c=newCanvas(src.width,src.height), x=c.getContext("2d");
+      x.fillStyle="#fff"; x.fillRect(0,0,c.width,c.height); x.drawImage(src,0,0);   // 透明部分は白
+      const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",0.95));
+      const bytes=setJpegDpi(new Uint8Array(await blob.arrayBuffer()),o.dpi||CALC_DPI);
+      if(handle){
+        const w=await handle.createWritable(); await w.write(bytes); await w.close();
+      }else{
+        const url=URL.createObjectURL(new Blob([bytes],{type:"image/jpeg"}));
+        const a=document.createElement("a"); a.href=url; a.download=name; a.click();
+        setTimeout(()=>URL.revokeObjectURL(url),4000);
+      }
+      toast("保存しました: "+name);
+    }catch(e){ toast("ファイルを保存できませんでした: "+e.message,4000); }
+  }
+
+  // --- 切り抜き ---
+  const MIN=24;
+  const cropBar=q(".js-crop-bar"), layer=q(".js-crop-layer"), box=q(".js-crop-box"),
+        ratioSel=q(".js-ratio"), customWrap=q(".js-custom"), cw=q(".js-cw"), ch=q(".js-ch");
+  let crop=null, drag=null;       // crop = {ratio:[w,h]|null, f:{x,y,w,h}} ※fは画像に対する割合(0〜1)
+  function currentRatio(){
+    const v=ratioSel.value;
+    if(v==="free") return null;
+    if(v==="custom") return [Math.max(1,+cw.value||1),Math.max(1,+ch.value||1)];
+    const [a,b]=v.split(":").map(Number); return [a,b];
+  }
+  function imgRect(){return cv.getBoundingClientRect();}
+  function fitCrop(){
+    const r=imgRect(), W=r.width, H=r.height, ratio=crop.ratio;
+    let w=W*0.9, h=H*0.9;
+    if(ratio){ const rr=ratio[0]/ratio[1]; w=Math.min(W,H*rr)*0.9; h=w/rr; }
+    crop.f={x:(W-w)/2/W,y:(H-h)/2/H,w:w/W,h:h/H};
+  }
+  function renderCrop(){
+    if(!crop) return;
+    const r=imgRect(), vr=viewer.getBoundingClientRect(), f=crop.f;
+    box.style.left=(r.left-vr.left+f.x*r.width)+"px";
+    box.style.top=(r.top-vr.top+f.y*r.height)+"px";
+    box.style.width=(f.w*r.width)+"px";
+    box.style.height=(f.h*r.height)+"px";
+    box.classList.toggle("locked",!!crop.ratio);
+  }
+  function startCrop(){
+    const o=cur();
+    if(crop){endCrop();return;}
+    if(!o||!o.pdata){toast("写真が読み込まれていません");return;}
+    if(activeCropPane){toast("他の写真の切り抜きを先に確定またはキャンセルしてください");return;}
+    resetView();
+    ratioSel.value=o.pw>=o.ph?"3:2":"2:3";
+    customWrap.hidden=true;
+    crop={ratio:currentRatio(),f:null};
+    activeCropPane=api;
+    cropBar.hidden=false; layer.hidden=false;
+    fitCrop(); renderCrop();
+    setBusyUI(true);
+  }
+  function endCrop(){
+    crop=null; drag=null; activeCropPane=null;
+    cropBar.hidden=true; layer.hidden=true;
+    setBusyUI(false);
+  }
+  async function confirmCrop(){
+    const o=cur(); if(!crop||!o) return;
+    const f=crop.f;
+    const src=await getProcessed(o);
+    let x=Math.round(f.x*src.width), y=Math.round(f.y*src.height);
+    let w=Math.round(f.w*src.width), h=Math.round(f.h*src.height);
+    x=clamp(x,0,src.width-1); y=clamp(y,0,src.height-1);
+    w=clamp(w,1,src.width-x); h=clamp(h,1,src.height-y);
+    const c=newCanvas(w,h); c.getContext("2d").drawImage(src,x,y,w,h,0,0,w,h);
+    endCrop();
+    await commit(o,c);
+    toast(`切り抜きました（${w} × ${h} px）`);
+  }
+  ratioSel.addEventListener("change",()=>{
+    if(!crop) return;
+    customWrap.hidden=ratioSel.value!=="custom";
+    crop.ratio=currentRatio(); fitCrop(); renderCrop();
+  });
+  [cw,ch].forEach(i=>i.addEventListener("input",()=>{
+    if(!crop||ratioSel.value!=="custom") return;
+    crop.ratio=currentRatio(); fitCrop(); renderCrop();
+  }));
+  q(".js-crop-ok").addEventListener("click",confirmCrop);
+  q(".js-crop-cancel").addEventListener("click",endCrop);
+  q(".js-crop").addEventListener("click",startCrop);
+  window.addEventListener("resize",()=>{ if(crop) renderCrop(); });
+
+  box.addEventListener("pointerdown",e=>{
+    if(!crop) return;
+    const r=imgRect(), f=crop.f;
+    drag={mode:e.target.dataset.h||"move",x0:e.clientX,y0:e.clientY,
+      rc:{x:f.x*r.width,y:f.y*r.height,w:f.w*r.width,h:f.h*r.height}};
+    box.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation();
+  });
+  box.addEventListener("pointermove",e=>{
+    if(!drag||!crop) return;
+    const r=imgRect(), W=r.width, H=r.height;
+    const dx=e.clientX-drag.x0, dy=e.clientY-drag.y0, m=drag.mode;
+    let {x,y,w,h}=drag.rc;
+    if(m==="move"){
+      x=clamp(x+dx,0,W-w); y=clamp(y+dy,0,H-h);
+    }else{
+      let left=x,right=x+w,top=y,bottom=y+h;
+      const ratio=crop.ratio?crop.ratio[0]/crop.ratio[1]:null;
+      if(ratio && m.length===2){
+        // 縦横比固定：反対側の角を固定して、ポインタに合わせて拡大縮小
+        const sx=m.includes("w")?-1:1, sy=m.includes("n")?-1:1;
+        const ax=sx>0?left:right, ay=sy>0?top:bottom;
+        const px=(sx>0?right:left)+dx, py=(sy>0?bottom:top)+dy;
+        let nw=Math.max(0,(px-ax)*sx), nh=Math.max(0,(py-ay)*sy);
+        nw=Math.max(nw,nh*ratio);
+        const maxW=Math.min(sx>0?W-ax:ax,(sy>0?H-ay:ay)*ratio);
+        nw=clamp(nw,Math.min(MIN,maxW),maxW);
+        const nh2=nw/ratio;
+        left=sx>0?ax:ax-nw; right=left+nw; top=sy>0?ay:ay-nh2; bottom=top+nh2;
+      }else if(!ratio){
+        if(m.includes("w")) left=clamp(left+dx,0,right-MIN);
+        if(m.includes("e")) right=clamp(right+dx,left+MIN,W);
+        if(m.includes("n")) top=clamp(top+dy,0,bottom-MIN);
+        if(m.includes("s")) bottom=clamp(bottom+dy,top+MIN,H);
+      }
+      x=left;y=top;w=right-left;h=bottom-top;
+    }
+    crop.f={x:x/W,y:y/H,w:w/W,h:h/H};
+    renderCrop();
+  });
+  const endDragCrop=()=>{drag=null;};
+  box.addEventListener("pointerup",endDragCrop);
+  box.addEventListener("pointercancel",endDragCrop);
+
+  // --- ボタン／ドラッグ＆ドロップ ---
+  q(".js-prev").addEventListener("click",()=>move(-1));
+  q(".js-next").addEventListener("click",()=>move(1));
+  q(".js-save").addEventListener("click",save);
+  q(".js-folder").addEventListener("click",()=>openPicker(setFiles,folderName));
+
+  viewer.addEventListener("dragover",e=>{e.preventDefault();viewer.classList.add("drag");});
+  viewer.addEventListener("dragleave",()=>viewer.classList.remove("drag"));
+  viewer.addEventListener("drop",e=>{
+    e.preventDefault();viewer.classList.remove("drag");
+    const files=[...e.dataTransfer.files];
+    if(files.length) setFiles(files,"(ドロップした画像)");
+  });
+
+  // マウスホイールで左右同時ズーム（カーソル位置を中心に）
+  viewer.addEventListener("wheel",e=>{
+    if(!state.img||crop||activeCropPane) return;
+    e.preventDefault();
+    const r=viewer.getBoundingClientRect();
+    const cx=e.clientX-r.left-r.width/2, cy=e.clientY-r.top-r.height/2;
+    const factor=e.deltaY<0?1.1:1/1.1;
+    const ns=clamp(view.scale*factor,1,10), f=ns/view.scale;
+    view.tx=cx-(cx-view.tx)*f; view.ty=cy-(cy-view.ty)*f; view.scale=ns;
+    if(ns===1){view.tx=0;view.ty=0;}
+    applyView();
+  },{passive:false});
+
+  // ドラッグで移動（左右同期）
+  let dragging=false,lx=0,ly=0;
+  viewer.addEventListener("pointerdown",e=>{
+    if(view.scale===1||!state.img||crop) return;
+    dragging=true;lx=e.clientX;ly=e.clientY;viewer.classList.add("grabbing");
+    viewer.setPointerCapture(e.pointerId);
+  });
+  viewer.addEventListener("pointermove",e=>{
+    if(!dragging) return;
+    view.tx+=e.clientX-lx; view.ty+=e.clientY-ly; lx=e.clientX; ly=e.clientY; applyView();
+  });
+  const endDrag=e=>{dragging=false;viewer.classList.remove("grabbing");};
+  viewer.addEventListener("pointerup",endDrag);
+  viewer.addEventListener("pointercancel",endDrag);
+  viewer.addEventListener("dblclick",()=>{ if(!crop) resetView(); });
+  viewer.addEventListener("dragstart",e=>e.preventDefault());
+
+  const api={el, side, move, currentImg:()=>state.img, cur, getProcessed, commit,
+    hasImage:()=>!!cur()&&!!cur().base, isCropping:()=>!!crop, endCrop, confirmCrop,
+    getSize:()=>{const o=cur();return o&&o.base?[o.base.width,o.base.height]:null;},
+    getName:()=>cur()?cur().name:"", ensureCur:()=>cur()?ensureBase(cur()):null,
+    folderLabel:()=>folderName.textContent};
+  return api;
+}
+
+// 切り抜き中は他の操作を止める
+let activeCropPane=null;
+function setBusyUI(on){
+  document.querySelectorAll(".js-sync-prev,.js-sync-next,.js-match-lr,.js-match-rl,.js-resize,.js-folder,.js-prev,.js-next,.js-save,.js-undo,.js-orig,.js-adj-reset")
+    .forEach(b=>b.disabled=on);
+  document.querySelectorAll(".adj input[type=range]").forEach(s=>s.disabled=on);
+}
+
+// 共通フォルダ選択
+const picker=document.getElementById("picker");
+let pickerCb=null,pickerLabel=null;
+function openPicker(cb,labelEl){ pickerCb=cb; pickerLabel=labelEl; picker.value=""; picker.click(); }
+picker.addEventListener("change",()=>{
+  const files=[...picker.files];
+  let label="";
+  if(files.length){
+    const rel=files[0].webkitRelativePath||"";
+    const dir=rel.includes("/")? rel.slice(0,rel.lastIndexOf("/")) : "";
+    label = dir || ("("+files.length+"枚)");
+  }
+  if(pickerCb) pickerCb(files,label);
+});
+
+const panes=[
+  makePane(document.querySelector('[data-side="left"]'),"left"),
+  makePane(document.querySelector('[data-side="right"]'),"right")
+];
+const [left,right]=panes;
+document.querySelector(".js-sync-prev").addEventListener("click",()=>{left.move(-1);right.move(-1);});
+document.querySelector(".js-sync-next").addEventListener("click",()=>{left.move(1);right.move(1);});
+document.querySelector(".js-reset").addEventListener("click",resetView);
+
+// ---------- 色合わせ（左→右 / 右→左 の両方向） ----------
+// from を基準（参照）にして、to の色調・明るさを合わせる。結果は to の新しい元画像として確定（元に戻す可）。
+let matching=false;
+async function matchPanes(from,to){
+  if(matching||activeCropPane) return;
+  if(!from.cur()||!to.cur()){ toast("左右両方の画像を読み込んでください"); return; }
+  matching=true;
+  const lbl={left:"左",right:"右"};
+  try{
+    toast(`処理中… (${lbl[from.side]} → ${lbl[to.side]})`,60000); await tick();
+    const ref=await from.getProcessed();
+    const src=await to.getProcessed();
+    const method=document.querySelector(".js-method").value;
+    const out= method==="lab" ? labTransfer(src,ref) : histMatch(src,ref);
+    await to.commit(to.cur(),out,true);
+    toast(`${lbl[to.side]}を${lbl[from.side]}に合わせました（${from.getName()} → ${to.getName()}）`,3500);
+  }catch(e){
+    toast("補正に失敗しました: "+e.message,4000);
+  }finally{ matching=false; }
+}
+document.querySelector(".js-match-lr").addEventListener("click",()=>matchPanes(left,right));
+document.querySelector(".js-match-rl").addEventListener("click",()=>matchPanes(right,left));
+
+// ---------- 画像サイズ変更ダイアログ ----------
+const dlg=document.getElementById("resizeDlg");
+const $=id=>document.getElementById(id);
+const rz={A:$("rzA"),B:$("rzB"),pct:$("rzPct"),wpx:$("rzWpx"),hpx:$("rzHpx"),wcm:$("rzWcm"),hcm:$("rzHcm"),keep:$("rzKeep"),prev:$("rzPreview")};
+let rzMode="percent";
+const rzPane=k=>k==="A"?left:right;
+function rzTargets(){
+  const t=[];
+  [["A",rz.A],["B",rz.B]].forEach(([k,cb])=>{ const p=rzPane(k),s=p.getSize(); if(cb.checked&&s) t.push({k,p,s}); });
+  return t;
+}
+function rzRef(){ const t=rzTargets(); return t.length?t[0].s:null; }
+function rzSizeFor(s){
+  const [w,h]=s;
+  if(rzMode==="percent"){ const p=(+rz.pct.value||100)/100; return [Math.max(1,Math.round(w*p)),Math.max(1,Math.round(h*p))]; }
+  const tw=Math.round(+rz.wpx.value), th=Math.round(+rz.hpx.value);
+  if(!(tw>0&&th>0)) return [w,h];
+  if(!rz.keep.checked) return [tw,th];
+  const asp=w/h, tasp=tw/th;     // 縦横比を維持して指定サイズの枠に収める
+  let nw,nh;
+  if(tasp>asp){ nh=th; nw=Math.round(nh*asp); } else { nw=tw; nh=Math.round(nw/asp); }
+  return [Math.max(1,nw),Math.max(1,nh)];
+}
+function rzFillPx(w,h){
+  rz.wpx.value=w; rz.hpx.value=h;
+  rz.wcm.value=(w/CALC_DPI*2.54).toFixed(2); rz.hcm.value=(h/CALC_DPI*2.54).toFixed(2);
+}
+function rzPreviewUpdate(){
+  const lines=[];
+  rzTargets().forEach(({k,s})=>{
+    const n=rzSizeFor(s);
+    lines.push(`写真${k==="A"?"左":"右"}: ${s[0]}×${s[1]} → ${n[0]}×${n[1]} px（${(n[0]/CALC_DPI*2.54).toFixed(2)}×${(n[1]/CALC_DPI*2.54).toFixed(2)} cm）`);
+  });
+  rz.prev.textContent=lines.join("\n")||"変更する写真を選んでください";
+}
+function rzFromRef(){
+  const ref=rzRef(); if(!ref) return;
+  if(rzMode==="percent"){ rzFillPx(Math.round(ref[0]*(+rz.pct.value||100)/100),Math.round(ref[1]*(+rz.pct.value||100)/100)); }
+}
+rz.pct.addEventListener("input",()=>{rzMode="percent";rzFromRef();rzPreviewUpdate();});
+function pxInput(changed){
+  rzMode="px"; const ref=rzRef();
+  let w=+rz.wpx.value, h=+rz.hpx.value;
+  if(ref&&rz.keep.checked){
+    if(changed==="w") h=Math.round(w*ref[1]/ref[0]); else w=Math.round(h*ref[0]/ref[1]);
+  }
+  rzFillPx(Math.round(w)||0,Math.round(h)||0);
+  if(ref&&w>0) rz.pct.value=(w/ref[0]*100).toFixed(1);
+  rzPreviewUpdate();
+}
+function cmInput(changed){
+  const ref=rzRef();
+  let w=(+rz.wcm.value)/2.54*CALC_DPI, h=(+rz.hcm.value)/2.54*CALC_DPI;
+  if(ref&&rz.keep.checked){
+    if(changed==="w") h=w*ref[1]/ref[0]; else w=h*ref[0]/ref[1];
+  }
+  rzMode="px"; rzFillPx(Math.round(w)||0,Math.round(h)||0);
+  if(ref&&w>0) rz.pct.value=(w/ref[0]*100).toFixed(1);
+  rzPreviewUpdate();
+}
+rz.wpx.addEventListener("input",()=>pxInput("w"));
+rz.hpx.addEventListener("input",()=>pxInput("h"));
+rz.wcm.addEventListener("input",()=>cmInput("w"));
+rz.hcm.addEventListener("input",()=>cmInput("h"));
+[rz.A,rz.B,rz.keep].forEach(c=>c.addEventListener("change",()=>{
+  if(rzMode==="percent") rzFromRef(); rzPreviewUpdate();
+}));
+document.querySelector(".js-resize").addEventListener("click",async ()=>{
+  if(activeCropPane) return;
+  await Promise.all([left.ensureCur(),right.ensureCur()].filter(Boolean));
+  const sl=left.getSize(), sr=right.getSize();
+  if(!sl&&!sr){ toast("画像が読み込まれていません"); return; }
+  rz.A.disabled=!sl; rz.B.disabled=!sr; rz.A.checked=!!sl; rz.B.checked=!!sr;
+  $("rzALabel").textContent=sl?`左の写真（現在: ${sl[0]} × ${sl[1]} px）`:"左の写真（未読み込み）";
+  $("rzBLabel").textContent=sr?`右の写真（現在: ${sr[0]} × ${sr[1]} px）`:"右の写真（未読み込み）";
+  rzMode="percent"; rz.pct.value=100; rz.keep.checked=true; rzFromRef(); rzPreviewUpdate();
+  dlg.showModal();
+});
+$("rzCancel").addEventListener("click",()=>dlg.close());
+$("rzOk").addEventListener("click",async ()=>{
+  const targets=rzTargets();
+  if(!targets.length){ toast("変更する写真を選んでください"); return; }
+  if(rzMode==="px"&&!(+rz.wpx.value>0&&+rz.hpx.value>0)){ toast("有効なサイズを入力してください"); return; }
+  dlg.close();
+  toast("サイズ変更中…",60000); await tick();
+  try{
+    const done=[];
+    for(const {k,p,s} of targets){
+      const [nw,nh]=rzSizeFor(s);
+      if(nw===s[0]&&nh===s[1]) continue;
+      const src=await p.getProcessed();
+      await p.commit(p.cur(),resampleCanvas(src,nw,nh));
+      done.push(`${k==="A"?"左":"右"}:${s[0]}×${s[1]}→${nw}×${nh}`);
+    }
+    toast(done.length?"サイズを変更しました（"+done.join(", ")+"、300dpi）":"サイズに変更はありません",4000);
+  }catch(e){ toast("サイズ変更に失敗しました: "+e.message,4000); }
+});
+
+// ---------- キーボード ----------
+document.addEventListener("keydown",e=>{
+  const tag=(e.target&&e.target.tagName)||"";
+  if(tag==="INPUT"||tag==="SELECT"||tag==="TEXTAREA") return;
+  if(activeCropPane){
+    if(e.key==="Enter"){activeCropPane.confirmCrop();}
+    else if(e.key==="Escape"){activeCropPane.endCrop();}
+    return;
+  }
+  if(e.key==="ArrowLeft"){left.move(-1);right.move(-1);}
+  else if(e.key==="ArrowRight"){left.move(1);right.move(1);}
+  else if(e.key==="0"){resetView();}
+});
+</script>
+</body>
+</html>
